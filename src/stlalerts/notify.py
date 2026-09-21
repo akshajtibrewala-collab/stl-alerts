@@ -6,14 +6,15 @@ the mutes, so no server or token is needed. The secret topic name is the only
 credential, so keep it in GitHub secrets.
 """
 import json
+import re
 import urllib.request
+from email.header import Header
 
 from . import state as st
 
-PHASE_LABEL = {
-    "arrival": "Now arriving at STL", "departure": "Now departing STL",
-    "ground": "On the ground at STL", "inbound": "Inbound to STL",
-}
+# Live (ADS-B) status words. "Inbound" only ever appears on live alerts; scheduled alerts say Planned/Swapped.
+LIVE_STATUS = {"inbound": "Inbound", "arrival": "Inbound", "departure": "Airborne", "ground": "On ground"}
+ARROW = {"Departure": "→", "Arrival": "←"}   # -> going to that airport, <- coming from it
 
 
 def flightradar24_url(reg):
@@ -21,70 +22,81 @@ def flightradar24_url(reg):
     return f"https://www.flightradar24.com/data/aircraft/{reg}"
 
 
+def short_airline(name):
+    """'Southwest Airlines' -> 'Southwest', 'Delta Air Lines' -> 'Delta'; 'British Airways' stays."""
+    return re.sub(r"\s+(Airlines?|Air Lines)$", "", (name or "").strip())
+
+
+def _unverified(x):
+    """Only rows the database itself marks `unverified` get the tag."""
+    return x.get("status") == "unverified"
+
+
 def build_message(m, mute_hours, ctl_url):
-    """Live sighting from the ADS-B pass. Always titled 'Live:' so it is never mistaken for a plan."""
-    tag = " (possible diversion)" if m["tag"] == "diversion?" else ""
-    title = f"Live: {m['livery_name']} ({m['registration']})"
-    lines = [
-        f"{m['airline']} {m['callsign'] or 'no callsign'} - {PHASE_LABEL[m['phase']]}{tag}",
-        f"LIVE sighting (ADS-B): {m['aircraft_type']}  {m['dist_nm']:.0f} nm from STL, "
-        + ("on ground" if m["alt_ft"] == "ground" else f"{m['alt_ft']:,} ft"),
-    ]
-    if m.get("scheduled"):
-        lines.append(f"Scheduled {m['scheduled']}" + (f", gate {m['gate']}" if m.get("gate") else ""))
-    if m["status"] != "active" or m["confidence"] != "verified":
-        lines.append("Note: livery entry is not hand-verified; the tail may have been repainted.")
-    click = flightradar24_url(m["registration"])
-    actions = f"http, Mute {mute_hours}h, {ctl_url}, method=POST, body=mute {m['registration']} {mute_hours}, clear=true"
+    """Live sighting from the ADS-B pass."""
+    title = f"{LIVE_STATUS[m['phase']]}: {m['livery_name']} ({m['registration']})"
+    parts = [f"{short_airline(m['airline'])} {m['callsign'] or 'no callsign'}"]
+    parts.append("at STL" if m["phase"] == "ground" else f"{m['dist_nm']:.0f} nm")
+    if m["phase"] != "ground" and m["alt_ft"] != "ground":
+        parts.append(f"{m['alt_ft']:,} ft")
+    if m["tag"] == "diversion?":
+        parts.append("diversion?")
+    if _unverified(m):
+        parts.append("(unverified)")
     return {
-        "title": title, "body": "\n".join(lines), "click": click,
-        "tags": "airplane", "priority": "4", "actions": actions,
+        "title": title, "body": " · ".join(parts), "click": flightradar24_url(m["registration"]),
+        "tags": "airplane", "priority": "4",
+        "actions": f"http, Mute {mute_hours}h, {ctl_url}, method=POST, body=mute {m['registration']} {mute_hours}, clear=true",
     }
 
 
 def build_schedule_message(a, mute_hours, ctl_url):
     """Alert from the schedule pass: planned / swap_in / swap_out / swap_change."""
     kind = a["alert_type"]
-    when = a["scheduled"]
-    if a["gate"]:
-        when += f", gate {a['gate']}"
+    dep = a["direction"] == "Departure"
+    other = f" {ARROW[a['direction']]} {a['other_airport']}" if a["other_airport"] else ""
+    line1 = f"{short_airline(a['airline'])} {a['flight_number']}{other}"
+    if a["tag"] == "diversion?":
+        line1 += " · diversion?"
+    line2 = [("Dep " if dep else "Arr ") + a["scheduled"]]
     if a["terminal"]:
-        when += f", terminal {a['terminal']}"
-    place = f"{'to' if a['direction'] == 'Departure' else 'from'} {a['other_airport']}" if a["other_airport"] else ""
-    flight = f"{a['airline']} {a['flight_number']} {a['direction'].lower()} {place}".strip()
-    div = " (possible diversion)" if a["tag"] == "diversion?" else ""
+        line2.append(f"Terminal {a['terminal']}")
+    if a["gate"]:
+        line2.append(f"Gate {a['gate']}")
     if kind == "planned":
         title = f"Planned: {a['livery_name']} ({a['registration']})"
-        lines = [f"{flight}{div}", f"Scheduled {when}",
-                 "PLANNED from the schedule, not a live sighting. The tail can still be swapped. "
-                 "You'll get a separate LIVE alert when it's actually spotted flying near STL."]
     elif kind == "swap_in":
-        title = f"Swapped IN: {a['livery_name']} ({a['registration']})"
-        lines = [f"{flight}{div}", f"Scheduled {when}",
-                 f"Now assigned to this flight instead of {a['old_reg']} (standard livery). Still a plan, not a sighting."]
+        title = f"Swapped in: {a['livery_name']} ({a['registration']})"
+        line2.append(f"replaces {a['old_reg']}")
     elif kind == "swap_change":
-        title = f"Livery changed: {a['old_livery']} -> {a['new_livery']}"
-        lines = [f"{flight}{div}", f"Scheduled {when}",
-                 f"Tail changed {a['old_reg']} -> {a['new_reg']}; both are special liveries. Still a plan, not a sighting."]
+        title = f"Swapped: {a['old_livery']} → {a['new_livery']}"
+        line2.append(f"{a['old_reg']} → {a['new_reg']}")
     else:  # swap_out
-        title = f"Swapped OUT: {a['old_livery']} ({a['old_reg']})"
-        new = f"{a['new_reg']}" + (f" ({a['new_livery']})" if a["new_livery"] else " (standard livery)")
-        lines = [f"{flight}{div}", f"Scheduled {when}", f"No longer assigned; now {new}."]
-    if a["status"] != "active" or a["confidence"] != "verified":
-        lines.append("Note: livery entry is not hand-verified; the tail may have been repainted.")
-    tail = a["new_reg"] if kind != "swap_out" else a["old_reg"]
+        title = f"Swapped out: {a['old_livery']} ({a['old_reg']})"
+        line2.append(f"now {a['new_reg']}")
+    if _unverified(a):
+        line2.append("(unverified)")
+    tail = a["old_reg"] if kind == "swap_out" else a["new_reg"]
     return {
-        "title": title, "body": "\n".join(lines), "tags": "calendar,airplane",
-        "priority": "4" if kind != "planned" else "3",
-        "click": flightradar24_url(tail),
+        "title": title, "body": line1 + "\n" + " · ".join(line2), "tags": "calendar",
+        "priority": "3" if kind == "planned" else "4", "click": flightradar24_url(tail),
         "actions": f"http, Mute {mute_hours}h, {ctl_url}, method=POST, body=mute {a['registration']} {mute_hours}, clear=true",
     }
+
+
+def _header(value):
+    """HTTP headers are latin-1; anything else (e.g. the arrow in a swap title) goes as an RFC 2047 encoded-word."""
+    try:
+        value.encode("latin-1")
+        return value
+    except UnicodeEncodeError:
+        return Header(value, "utf-8").encode()
 
 
 def send(server, topic, msg):
     req = urllib.request.Request(
         f"{server.rstrip('/')}/{topic}", data=msg["body"].encode("utf-8"), method="POST",
-        headers={"Title": msg["title"], "Tags": msg["tags"], "Priority": msg["priority"],
+        headers={"Title": _header(msg["title"]), "Tags": msg["tags"], "Priority": msg["priority"],
                  **({"Click": msg["click"]} if msg.get("click") else {}),
                  **({"Actions": msg["actions"]} if msg.get("actions") else {})})
     with urllib.request.urlopen(req, timeout=20) as r:

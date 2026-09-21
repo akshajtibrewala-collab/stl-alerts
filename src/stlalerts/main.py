@@ -106,16 +106,20 @@ def run(args):
     ctl_url = f"{server}/{topic}-ctl"
 
     if args.test_notify:
-        live = {"registration": "N492AS", "hex": "", "callsign": "ASA388", "airline": "TEST ALERT",
-                "livery_name": "synthetic live alert", "aircraft_type": "B739", "phase": "inbound",
-                "dist_nm": 60, "alt_ft": 12000, "tag": "routine", "status": "active", "confidence": "verified"}
-        plan = {"alert_type": "planned", "registration": "N492AS", "livery_name": "synthetic planned alert",
-                "airline": "TEST ALERT", "flight_number": "AS 388", "direction": "Arrival", "other_airport": "SEA",
-                "scheduled": "Mon 2:10 PM", "gate": "", "terminal": "1", "tag": "routine", "status": "active",
-                "confidence": "verified", "old_reg": None, "new_reg": "N492AS", "old_livery": None, "new_livery": None}
+        live = {"registration": "N492AS", "hex": "", "callsign": "ASA388", "airline": "Alaska Airlines",
+                "livery_name": "TEST live alert", "aircraft_type": "B739", "phase": "inbound",
+                "dist_nm": 18, "alt_ft": 4200, "tag": "routine", "status": "active", "confidence": "verified"}
+        plan = {"alert_type": "planned", "registration": "N492AS", "livery_name": "TEST planned alert",
+                "airline": "Alaska", "flight_number": "AS 388", "direction": "Arrival", "other_airport": "SEA",
+                "scheduled": "Mon 2:10 PM", "gate": "", "terminal": "1", "tag": "routine", "status": "unverified",
+                "confidence": "best-effort", "old_reg": None, "new_reg": "N492AS", "old_livery": None, "new_livery": None}
+        swap = {**plan, "alert_type": "swap_change", "livery_name": "TEST swap", "old_reg": "N492AS",
+                "new_reg": "N500WR", "old_livery": "TEST old", "new_livery": "TEST new", "direction": "Departure",
+                "other_airport": "MDW", "status": "active"}
         for msg in (notify.build_message(live, acfg["mute_hours"], ctl_url),
-                    notify.build_schedule_message(plan, acfg["mute_hours"], ctl_url)):
-            print(msg["title"], "| click ->", msg["click"])
+                    notify.build_schedule_message(plan, acfg["mute_hours"], ctl_url),
+                    notify.build_schedule_message(swap, acfg["mute_hours"], ctl_url)):
+            print(msg["title"], "|", msg["body"].replace("\n", " / "), "| click ->", msg["click"])
             if topic:
                 print("sent:", notify.send(server, topic, msg))
         return 0

@@ -11,7 +11,7 @@ St. Louis Lambert (STL). Runs every ~10 minutes on GitHub Actions, reads free AD
 3. Phase is classified from position/altitude/heading: `inbound` (descending toward STL, <=120 nm),
    `arrival`/`departure` (<=40 nm), `ground` (<=4 nm, on the surface). High-altitude overflights are ignored.
 4. Duplicates are suppressed per tail+callsign for 6 h; muted tails are skipped.
-5. Alert -> ntfy (titled `Live: ...`), with a **Mute 24h** button; tapping it opens FlightRadar24 for the tail.
+5. Alert -> ntfy, with a **Mute 24h** button; tapping it opens FlightRadar24 for the tail.
 
 `watch_airlines` in `config/config.json` only sets the "routine" vs "possible diversion" wording and sort order.
 It never decides whether an alert fires.
@@ -107,6 +107,20 @@ Tests: `python -m unittest discover -s tests`.
 
 On some Windows Python installs HTTPS fails with "certificate has expired". Point Python at a good CA bundle,
 e.g. `SSL_CERT_FILE="C:/Program Files/Git/mingw64/etc/ssl/certs/ca-bundle.crt"`. GitHub's runner is unaffected.
+
+## What alerts look like
+
+Status first, then what you need to act on. `→` = going to that airport, `←` = coming from it.
+`(unverified)` only appears for database rows whose `status` is `unverified`; `diversion?` only for airlines not on the
+STL watch list. The terminal is STL's terminal (AeroDataBox reports the STL end of each flight).
+
+    Planned: Louisiana One (N8977G)            <- schedule pass (calendar icon)
+    Southwest WN 283 ← MDW
+    Arr Mon 7:05 PM · Terminal 2
+
+    Swapped in / Swapped out / Swapped: A → B  <- tail changed on a flight you were told about
+    Inbound: Louisiana One (N8977G)            <- ADS-B pass, live (airplane icon); also Airborne / On ground
+    Southwest SWA283 · 18 nm · 4,200 ft
 
 ## Muting
 

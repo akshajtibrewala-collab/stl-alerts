@@ -58,10 +58,8 @@ class TailTracking(unittest.TestCase):
                          ("N8977G", "Louisiana One", "B12", "1"))
         self.assertEqual(a["scheduled"], "Mon 7:05 PM")
         msg = notify.build_schedule_message(a, 24, "https://ntfy.sh/x-ctl")
-        self.assertIn("not a live sighting", msg["body"])
-        self.assertIn("gate B12", msg["body"])
-        self.assertIn("WN 283", msg["body"])
-        self.assertIn("Louisiana One", msg["title"])
+        self.assertEqual(msg["title"], "Planned: Louisiana One (N8977G)")
+        self.assertEqual(msg["body"], "Southwest WN 283 → MDW\nDep Mon 7:05 PM · Terminal 1 · Gate B12")
         self.assertIn("body=mute N8977G 24", msg["actions"])
         self.assertEqual(len(leads), 1)
 
@@ -80,8 +78,9 @@ class TailTracking(unittest.TestCase):
         self.assertEqual((a["registration"], a["old_reg"], a["new_reg"], a["new_livery"]),
                          ("N8977G", "N8977G", "N4444X", None))
         msg = notify.build_schedule_message(a, 24, "u")
-        self.assertIn("Swapped OUT", msg["title"])
-        self.assertIn("standard livery", msg["body"])
+        self.assertEqual(msg["title"], "Swapped out: Louisiana One (N8977G)")
+        self.assertEqual(msg["body"], "Southwest WN 283 → MDW\nDep Mon 7:05 PM · Terminal 1 · Gate B12 · now N4444X")
+        self.assertEqual(msg["click"], "https://www.flightradar24.com/data/aircraft/N8977G")   # the plane that left
         self.assertEqual(poll(s, fids("N4444X"), NOW + timedelta(hours=6))[0], [])  # and then quiet
 
     def test_swap_in_standard_to_special(self):
@@ -89,7 +88,9 @@ class TailTracking(unittest.TestCase):
         self.assertEqual(poll(s, fids("N4444X"))[0], [])  # standard tail: tracked silently
         alerts, _ = poll(s, fids("N8977G"), NOW + timedelta(hours=5))
         self.assertEqual([a["alert_type"] for a in alerts], ["swap_in"])
-        self.assertIn("Swapped IN", notify.build_schedule_message(alerts[0], 24, "u")["title"])
+        msg = notify.build_schedule_message(alerts[0], 24, "u")
+        self.assertEqual(msg["title"], "Swapped in: Louisiana One (N8977G)")
+        self.assertTrue(msg["body"].endswith("replaces N4444X"))
 
     def test_special_to_different_special_is_one_combined_alert(self):
         s = new_state()
@@ -97,7 +98,9 @@ class TailTracking(unittest.TestCase):
         alerts, _ = poll(s, fids("N1776R"), NOW + timedelta(hours=5))
         self.assertEqual([a["alert_type"] for a in alerts], ["swap_change"])
         msg = notify.build_schedule_message(alerts[0], 24, "u")
-        self.assertIn("Louisiana One -> Independence One", msg["title"])
+        self.assertEqual(msg["title"], "Swapped: Louisiana One → Independence One")
+        self.assertTrue(msg["body"].endswith("N8977G → N1776R"))
+        self.assertEqual(msg["click"], "https://www.flightradar24.com/data/aircraft/N1776R")
 
     def test_no_tail_yet_is_skipped_then_alerts_when_assigned(self):
         s = new_state()
@@ -170,9 +173,38 @@ class CrossPassAlerts(unittest.TestCase):
         self.assertTrue(first[0].startswith("Planned: Louisiana One"))
         second = run("live")    # ADS-B now sees the same tail in the air: must NOT be suppressed
         self.assertEqual(len(second), 1)
-        self.assertTrue(second[0].startswith("Live: Louisiana One"))
+        self.assertTrue(second[0].startswith("Inbound: Louisiana One"))   # the live ADS-B alert, distinct from Planned
         self.assertEqual(run("live"), [])   # a true duplicate (same pass, same flight) stays deduped
         self.assertEqual(run("empty"), [])  # and the unchanged tail never re-sends the Planned alert
+
+    def test_arrival_alert_shows_the_arrival_terminal_and_origin_arrow(self):
+        """API 'movement' is the STL end of the flight, so an arrival's terminal is where it arrives at STL."""
+        data = fids(direction="arrivals", number="AS 388", icao="ASA", utc="2026-09-22 00:10Z",
+                    local="2026-09-21 19:10-05:00", terminal="1", gate="")
+        data["arrivals"][0]["movement"]["airport"] = {"iata": "SEA"}      # the OTHER airport: where it came from
+        data["arrivals"][0]["airline"] = {"name": "Alaska Airlines", "iata": "AS", "icao": "ASA"}
+        f = aerodatabox.parse_fids(data)[0]
+        self.assertEqual((f["direction"], f["terminal"], f["other_airport"]), ("Arrival", "1", "SEA"))
+        by_reg, by_hex = liveries.alertable([row("N492AS", "UNCF", "Alaska Airlines")], {"active"}, {"livery"})
+        data["arrivals"][0]["aircraft"]["reg"] = "N492AS"
+        alerts = schedule.process(aerodatabox.parse_fids(data), new_state(), by_reg, by_hex, WATCH, NOW, SCFG, [])
+        msg = notify.build_schedule_message(alerts[0], 24, "u")
+        self.assertEqual(msg["title"], "Planned: UNCF (N492AS)")
+        self.assertEqual(msg["body"], "Alaska AS 388 ← SEA\nArr Mon 7:10 PM · Terminal 1")
+
+    def test_terminal_and_gate_are_omitted_when_missing(self):
+        alerts, _ = poll(new_state(), fids(gate="", terminal=""))
+        self.assertEqual(notify.build_schedule_message(alerts[0], 24, "u")["body"],
+                         "Southwest WN 283 → MDW\nDep Mon 7:05 PM")
+
+    def test_unverified_tag_and_diversion_tag_on_scheduled_alerts(self):
+        unv = {"registration": "N8977G", "icao24": "", "airline": "Southwest Airlines", "aircraft_type": "B38M",
+               "livery_name": "Louisiana One", "kind": "livery", "status": "unverified", "confidence": "best-effort"}
+        by_reg, by_hex = liveries.alertable([unv], {"unverified"}, {"livery"})
+        alerts = schedule.process(aerodatabox.parse_fids(fids(icao="QFA")), new_state(), by_reg, by_hex, WATCH, NOW, SCFG, [])
+        body = notify.build_schedule_message(alerts[0], 24, "u")["body"]
+        self.assertTrue(body.startswith("Southwest WN 283 → MDW · diversion?\n"))
+        self.assertTrue(body.endswith("(unverified)"))
 
     def test_every_alert_type_opens_flightradar24_for_its_tail(self):
         base = {"alert_type": "planned", "registration": "N8977G", "livery_name": "L", "airline": "A",

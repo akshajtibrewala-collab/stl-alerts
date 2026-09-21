@@ -109,17 +109,61 @@ class DedupeAndMute(unittest.TestCase):
 
 
 class Notify(unittest.TestCase):
-    def test_message_and_mute_action(self):
+    def live(self, **kw):
         m = {"registration": "N8977G", "hex": "ac0f03", "callsign": "SWA283", "airline": "Southwest Airlines",
-             "livery_name": "Louisiana One", "aircraft_type": "B38M", "phase": "arrival", "dist_nm": 12.3,
-             "alt_ft": 3400, "tag": "diversion?", "status": "active", "confidence": "verified"}
-        msg = notify.build_message(m, 24, "https://ntfy.sh/secret-ctl")
-        self.assertIn("Louisiana One", msg["title"])
-        self.assertIn("Now arriving at STL (possible diversion)", msg["body"])
-        self.assertTrue(msg["title"].startswith("Live: "))
+             "livery_name": "Louisiana One", "aircraft_type": "B38M", "phase": "inbound", "dist_nm": 18.2,
+             "alt_ft": 4200, "tag": "routine", "status": "active", "confidence": "verified"}
+        m.update(kw)
+        return notify.build_message(m, 24, "https://ntfy.sh/secret-ctl")
+
+    def test_live_inbound(self):
+        msg = self.live()
+        self.assertEqual(msg["title"], "Inbound: Louisiana One (N8977G)")
+        self.assertEqual(msg["body"], "Southwest SWA283 · 18 nm · 4,200 ft")
         self.assertEqual(msg["click"], "https://www.flightradar24.com/data/aircraft/N8977G")
         self.assertIn("body=mute N8977G 24", msg["actions"])
-        msg["title"].encode("latin-1")  # HTTP headers must be latin-1 safe
+
+    def test_live_arrival_phase_also_reads_inbound(self):
+        self.assertEqual(self.live(phase="arrival")["title"], "Inbound: Louisiana One (N8977G)")
+
+    def test_live_airborne_departure(self):
+        msg = self.live(phase="departure", dist_nm=6.0, alt_ft=2100)
+        self.assertEqual(msg["title"], "Airborne: Louisiana One (N8977G)")
+        self.assertEqual(msg["body"], "Southwest SWA283 · 6 nm · 2,100 ft")
+
+    def test_live_on_ground(self):
+        msg = self.live(phase="ground", alt_ft="ground", dist_nm=0.1)
+        self.assertEqual(msg["title"], "On ground: Louisiana One (N8977G)")
+        self.assertEqual(msg["body"], "Southwest SWA283 · at STL")
+
+    def test_live_diversion(self):
+        msg = self.live(registration="G-EUPJ", livery_name="Retro", airline="British Airways", callsign="BAW1",
+                        dist_nm=22.0, alt_ft=5000, tag="diversion?")
+        self.assertEqual(msg["title"], "Inbound: Retro (G-EUPJ)")
+        self.assertEqual(msg["body"], "British Airways BAW1 · 22 nm · 5,000 ft · diversion?")
+
+    def test_unverified_tag_only_for_rows_marked_unverified(self):
+        self.assertTrue(self.live(status="unverified")["body"].endswith("(unverified)"))
+        self.assertNotIn("unverified", self.live(status="active", confidence="best-effort")["body"])
+
+    def test_no_boilerplate_left(self):
+        body = self.live(status="unverified")["body"].lower()
+        for phrase in ("not hand-verified", "repainted", "live sighting", "scheduled"):
+            self.assertNotIn(phrase, body)
+
+    def test_airline_shortening(self):
+        from stlalerts.notify import short_airline
+        self.assertEqual(short_airline("Southwest Airlines"), "Southwest")
+        self.assertEqual(short_airline("Delta Air Lines"), "Delta")
+        self.assertEqual(short_airline("British Airways"), "British Airways")
+        self.assertEqual(short_airline("Air Canada"), "Air Canada")
+
+    def test_title_header_encoding_handles_arrows(self):
+        self.assertEqual(notify._header("plain: Louisiana One"), "plain: Louisiana One")
+        enc = notify._header("Swapped: A → B")
+        enc.encode("latin-1")                     # safe to put in an HTTP header
+        from email.header import decode_header, make_header
+        self.assertEqual(str(make_header(decode_header(enc))), "Swapped: A → B")
 
     def test_control_messages_apply(self):
         state = {"alerted": {}, "mutes": {}, "ctl_since": "24h"}
