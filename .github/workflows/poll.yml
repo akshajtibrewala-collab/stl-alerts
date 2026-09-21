@@ -1,0 +1,38 @@
+name: poll-stl
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # GitHub may delay this by several minutes; that's fine
+  workflow_dispatch: {}
+
+permissions:
+  contents: write            # to commit state/state.json
+
+concurrency:
+  group: poll-stl
+  cancel-in-progress: false
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Poll and alert
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          ADSB_API_KEY: ${{ secrets.ADSB_API_KEY }}
+        run: python stl_alerts.py
+      - name: Commit state if changed
+        run: |
+          if [ -n "$(git status --porcelain state/)" ]; then
+            git config user.name "stl-alerts-bot"
+            git config user.email "actions@users.noreply.github.com"
+            git add state/state.json
+            git commit -m "state: update"
+            git pull --rebase
+            git push
+          fi

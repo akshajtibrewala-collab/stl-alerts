@@ -1,0 +1,30 @@
+{
+  "airport": { "icao": "KSTL", "iata": "STL", "lat": 38.7487, "lon": -90.3700 },
+
+  "geometry": {
+    "ground_radius_nm": 4,
+    "geofence_radius_nm": 40,
+    "inbound_radius_nm": 120,
+    "inbound_max_alt_ft": 25000,
+    "overflight_alt_ft": 18000
+  },
+
+  "alerts": {
+    "statuses": ["active", "unverified"],
+    "_kinds_note": "Off by default: \"alliance\" (Star Alliance/oneworld/SkyTeam, extremely common at STL) and \"decal\" (stickers, not paint). Add them to alert on those too.",
+    "kinds": ["livery", "retro", "partnership", "other"],
+    "phases": ["inbound", "arrival", "ground", "departure"],
+    "cooldown_hours": 6,
+    "mute_hours": 24
+  },
+
+  "_watch_airlines_note": "Presentation and schedule-pass scope ONLY. Never filters which liveries alert (diversions from any airline must match).",
+  "watch_airlines": [
+    "Southwest Airlines", "American Airlines", "Delta Air Lines", "United Airlines",
+    "Alaska Airlines", "Frontier Airlines", "Air Canada", "British Airways",
+    "Lufthansa", "Southern Airways Express",
+    "Delta Airlines", "American Eagle / Envoy", "Alaska Airlines / Horizon Air", "British Airways / BA CityFlyer"
+  ],
+
+  "adsb": { "base_url": "https://api.adsb.lol", "min_interval_seconds": 3 }
+}
