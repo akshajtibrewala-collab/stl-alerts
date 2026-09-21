@@ -16,8 +16,57 @@ St. Louis Lambert (STL). Runs every ~10 minutes on GitHub Actions, reads free AD
 `watch_airlines` in `config/config.json` only sets the "routine" vs "possible diversion" wording and sort order.
 It never decides whether an alert fires.
 
-**Not built yet:** the schedule-confirmation pass (AeroDataBox) for scheduled time and gate. The alert
-message already has empty fields for it.
+## The schedule pass (AeroDataBox): planned alerts and swap detection
+
+The ADS-B pass can only see a plane when it is airborne or transmitting near STL (roughly 30 min before an
+arrival). The **schedule pass** covers the hours before that: it reads STL's board from AeroDataBox
+(`GET /flights/airports/icao/KSTL`, "FIDS by relative time", TIER 2 = 2 API units per call), looks at the
+tail number assigned to each flight, and checks it against the same livery database with the same rules
+(no airline filter, same `alerts.statuses` / `alerts.kinds`).
+
+* **No tail yet?** Skipped silently and re-checked on a later poll. Nothing is alerted until a tail appears.
+* **Tail assigned and special:** a **Planned** alert with airline, flight number, direction, scheduled time,
+  gate/terminal (when AeroDataBox has them) and livery. It says plainly that it is a plan, not a sighting.
+* **Swap detection.** The tail last seen on each flight (per flight number + date + direction) is stored in
+  `state/state.json`. If a later poll shows a different tail:
+  * standard -> special: **Swapped IN**
+  * special -> standard: **Swapped OUT**
+  * special -> a different special: one combined **Livery changed** alert
+  * unchanged tail: nothing, ever.
+* **One flight, one alert.** Both passes normalise flights to one key (`WN 283` = `SWA283`). If either pass
+  has already alerted about a tail on a flight, the other stays quiet. Muting a tail silences both passes.
+* **If a send fails,** the flight's tracking is rolled back so the next poll retries it.
+* **Independent passes.** Each pass is wrapped so an AeroDataBox error, rate limit or quota problem is logged and
+  skipped (the API is then left alone for 2-3 hours) and the ADS-B pass carries on.
+
+### Staying inside the free tier
+
+The pass keeps a monthly unit ledger in `state/state.json` and never polls when it would exceed
+`schedule.monthly_budget_units - budget_reserve_units` (400 - 20). Each poll fetches a 12-hour window, 2 units.
+
+| Poll | When | Cost/month |
+|---|---|---|
+| Base | 4 fixed times a day (`base_poll_hours_utc`: 10, 15, 20, 01 UTC = 5, 10, 15, 20 h CDT) | ~248 units |
+| Extra | up to 2/day, at most every 90 min, only while a flight already known to be special is within 3 h of its time, to catch a late swap. Only allowed if it can't starve the base polls. | uses the leftover ~130 |
+
+Tune these in `config/config.json` under `schedule`. If your plan is bigger, raise `monthly_budget_units`.
+`state/lead_times.csv` records when each flight's tail first appeared; run `python scripts/lead_time_report.py`
+after a few days to see how far ahead tails really get assigned at STL.
+
+### Setup for the schedule pass
+
+1. Get an AeroDataBox key. Per AeroDataBox's pricing page, the free route is **RapidAPI -> Basic plan**
+   (400 units/month, "free forever"): open [rapid.aerodatabox.com](https://rapid.aerodatabox.com), sign in to
+   RapidAPI, click **Subscribe** on the Basic plan, then copy the `X-RapidAPI-Key` from the code snippet.
+   API.Market's Basic plan is only a 7-day trial, and AeroDataBox's own "direct" plans are paid (from $19/month)
+   and were listed as "coming soon", so they are not a free option.
+2. GitHub repo -> Settings -> Secrets and variables -> Actions: add secret **`ADB_KEY`**, and (Variables tab)
+   **`ADB_PROVIDER`** = `rapidapi` (or `apimarket` / `direct`, matching where the key came from).
+3. Test locally first (spends 2 units): `ADB_KEY=... ADB_PROVIDER=rapidapi python scripts/probe_aerodatabox.py`
+   (PowerShell: `$env:ADB_KEY="..."; $env:ADB_PROVIDER="rapidapi"; py scripts/probe_aerodatabox.py`).
+   It shows how many flights have a tail, whether gate/terminal are populated, and the rate-limit headers.
+4. Offline test with no key: `python stl_alerts.py --dry-run --schedule-fixture some_fids.json`
+   (`--force-schedule` really calls the API even in `--dry-run`).
 
 ## Setup
 
@@ -73,5 +122,6 @@ updates unprotected rows, logs disagreements with protected rows to `data/confli
 * **When Southwest or others announce a new livery:** add the tail (1 min).
 * **If GitHub emails that the scheduled workflow was disabled** (idle repos are paused after ~60 days): re-enable it.
   The job touches `state.json` monthly to reduce this, but I haven't confirmed bot commits count as activity.
+* **AeroDataBox quota:** watch `state/state.json` -> `adb.units`; if your plan allows less than 400 units/month, lower `monthly_budget_units`.
 * **If adsb.lol starts requiring a key:** add it as the `ADSB_API_KEY` secret.
 * Coverage caveat: ADS-B is weak for aircraft parked on the ground with transponders off, so "on the ground" alerts are best-effort.

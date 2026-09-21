@@ -36,6 +36,45 @@ def build_message(m, mute_hours, ctl_url):
     }
 
 
+def build_schedule_message(a, mute_hours, ctl_url):
+    """Alert from the schedule pass: planned / swap_in / swap_out / swap_change."""
+    kind = a["alert_type"]
+    when = a["scheduled"]
+    if a["gate"]:
+        when += f", gate {a['gate']}"
+    if a["terminal"]:
+        when += f", terminal {a['terminal']}"
+    place = f"{'to' if a['direction'] == 'Departure' else 'from'} {a['other_airport']}" if a["other_airport"] else ""
+    flight = f"{a['airline']} {a['flight_number']} {a['direction'].lower()} {place}".strip()
+    div = " (possible diversion)" if a["tag"] == "diversion?" else ""
+    if kind == "planned":
+        title = f"Planned: {a['livery_name']} ({a['registration']})"
+        lines = [f"{flight}{div}", f"Scheduled {when}",
+                 "PLANNED from the schedule, not a live sighting. The tail can still be swapped; "
+                 "you'll get a follow-up if it changes."]
+    elif kind == "swap_in":
+        title = f"Swapped IN: {a['livery_name']} ({a['registration']})"
+        lines = [f"{flight}{div}", f"Scheduled {when}",
+                 f"Now assigned to this flight instead of {a['old_reg']} (standard livery). Still a plan, not a sighting."]
+    elif kind == "swap_change":
+        title = f"Livery changed: {a['old_livery']} -> {a['new_livery']}"
+        lines = [f"{flight}{div}", f"Scheduled {when}",
+                 f"Tail changed {a['old_reg']} -> {a['new_reg']}; both are special liveries. Still a plan, not a sighting."]
+    else:  # swap_out
+        title = f"Swapped OUT: {a['old_livery']} ({a['old_reg']})"
+        new = f"{a['new_reg']}" + (f" ({a['new_livery']})" if a["new_livery"] else " (standard livery)")
+        lines = [f"{flight}{div}", f"Scheduled {when}", f"No longer assigned; now {new}."]
+    if a["status"] != "active" or a["confidence"] != "verified":
+        lines.append("Note: livery entry is not hand-verified; the tail may have been repainted.")
+    tail = a["new_reg"] if kind != "swap_out" else a["old_reg"]
+    return {
+        "title": title, "body": "\n".join(lines), "tags": "calendar,airplane",
+        "priority": "4" if kind != "planned" else "3",
+        "click": f"https://www.flightaware.com/live/flight/{tail}",
+        "actions": f"http, Mute {mute_hours}h, {ctl_url}, method=POST, body=mute {a['registration']} {mute_hours}, clear=true",
+    }
+
+
 def send(server, topic, msg):
     req = urllib.request.Request(
         f"{server.rstrip('/')}/{topic}", data=msg["body"].encode("utf-8"), method="POST",

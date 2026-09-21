@@ -1,6 +1,10 @@
 {
-  "airport": { "icao": "KSTL", "iata": "STL", "lat": 38.7487, "lon": -90.3700 },
-
+  "airport": {
+    "icao": "KSTL",
+    "iata": "STL",
+    "lat": 38.7487,
+    "lon": -90.37
+  },
   "geometry": {
     "ground_radius_nm": 4,
     "geofence_radius_nm": 40,
@@ -8,23 +12,87 @@
     "inbound_max_alt_ft": 25000,
     "overflight_alt_ft": 18000
   },
-
   "alerts": {
-    "statuses": ["active", "unverified"],
+    "statuses": [
+      "active",
+      "unverified"
+    ],
     "_kinds_note": "Off by default: \"alliance\" (Star Alliance/oneworld/SkyTeam, extremely common at STL) and \"decal\" (stickers, not paint). Add them to alert on those too.",
-    "kinds": ["livery", "retro", "partnership", "other"],
-    "phases": ["inbound", "arrival", "ground", "departure"],
+    "kinds": [
+      "livery",
+      "retro",
+      "partnership",
+      "other"
+    ],
+    "phases": [
+      "inbound",
+      "arrival",
+      "ground",
+      "departure"
+    ],
     "cooldown_hours": 6,
     "mute_hours": 24
   },
-
   "_watch_airlines_note": "Presentation and schedule-pass scope ONLY. Never filters which liveries alert (diversions from any airline must match).",
   "watch_airlines": [
-    "Southwest Airlines", "American Airlines", "Delta Air Lines", "United Airlines",
-    "Alaska Airlines", "Frontier Airlines", "Air Canada", "British Airways",
-    "Lufthansa", "Southern Airways Express",
-    "Delta Airlines", "American Eagle / Envoy", "Alaska Airlines / Horizon Air", "British Airways / BA CityFlyer"
+    "Southwest Airlines",
+    "American Airlines",
+    "Delta Air Lines",
+    "United Airlines",
+    "Alaska Airlines",
+    "Frontier Airlines",
+    "Air Canada",
+    "British Airways",
+    "Lufthansa",
+    "Southern Airways Express",
+    "Delta Airlines",
+    "American Eagle / Envoy",
+    "Alaska Airlines / Horizon Air",
+    "British Airways / BA CityFlyer"
   ],
-
-  "adsb": { "base_url": "https://api.adsb.lol", "min_interval_seconds": 3 }
+  "adsb": {
+    "base_url": "https://api.adsb.lol",
+    "min_interval_seconds": 3
+  },
+  "schedule": {
+    "_note": "AeroDataBox schedule pass. FIDS is TIER 2 = 2 units/call per the official spec; free tier is ~400-600 units/month (sources disagree).",
+    "enabled": true,
+    "provider": "rapidapi",
+    "airport_icao": "KSTL",
+    "window_hours": 12,
+    "include_cargo": true,
+    "monthly_budget_units": 400,
+    "units_per_call": 2,
+    "budget_reserve_units": 20,
+    "base_poll_hours_utc": [
+      10,
+      15,
+      20,
+      1
+    ],
+    "watch_interval_minutes": 90,
+    "watch_horizon_hours": 3,
+    "max_extra_calls_per_day": 2,
+    "flight_retention_hours": 6
+  },
+  "watch_airline_codes": [
+    "SWA",
+    "AAL",
+    "DAL",
+    "UAL",
+    "ASA",
+    "FFT",
+    "ACA",
+    "BAW",
+    "DLH",
+    "SOO",
+    "ENY",
+    "RPA",
+    "SKW",
+    "EDV",
+    "JIA",
+    "GJS",
+    "UCA",
+    "AWI"
+  ]
 }

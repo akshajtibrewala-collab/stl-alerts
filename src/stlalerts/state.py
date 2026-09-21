@@ -3,6 +3,8 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from .flights import callsign_key
+
 
 def now():
     return datetime.now(timezone.utc)
@@ -18,6 +20,8 @@ def load(path):
     data.setdefault("alerted", {})   # "REG|CALLSIGN" -> iso time of last alert
     data.setdefault("mutes", {})     # "REG" -> iso expiry
     data.setdefault("ctl_since", "24h")
+    data.setdefault("flights", {})   # schedule pass: "SWA283|2026-09-21|D" -> tail/livery tracking
+    data.setdefault("adb", {})       # schedule pass: monthly unit budget + last poll
     data.setdefault("keepalive", _iso(now()))
     return data
 
@@ -43,6 +47,28 @@ def is_muted(state, reg, at=None):
 
 def mute(state, reg, hours, at=None):
     state["mutes"][reg] = _iso((at or now()) + timedelta(hours=hours))
+
+
+def planned_covers(state, reg, callsign, at=None):
+    """True if the schedule pass already alerted about this tail on the flight this callsign belongs to."""
+    fk = callsign_key(callsign)
+    if not fk:
+        return False
+    at = at or now()
+    for k, e in state["flights"].items():
+        fresh = datetime.fromisoformat(e["sched_utc"]) > at - timedelta(hours=6)
+        if e.get("alerted_reg") == reg and k.startswith(fk + "|") and fresh:
+            return True
+    return False
+
+
+def live_alerted(state, reg, fkey):
+    """True if the ADS-B pass already alerted (within cooldown) about this tail on this flight."""
+    for k in state["alerted"]:
+        r, _, cs = k.partition("|")
+        if r == reg and callsign_key(cs) == fkey:
+            return True
+    return False
 
 
 def alert_key(match):
