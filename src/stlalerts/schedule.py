@@ -32,8 +32,28 @@ def _latest_anchor(now, hours):
     return max(c for c in cands if c <= now)
 
 
+def plan(state, now, cfg):
+    """Spend the whole month's budget evenly: how many base polls per day, and at which UTC hours.
+
+    A poll costs the same whatever its time window (measured: 3 h and 12 h windows both cost 2 units), so
+    every poll asks for the full 12 h and the only levers are how many polls and when. Polls are placed across
+    the STL operating day (see poll_schedule_utc), just ahead of the departure banks, because that is when
+    freshly assigned tails are most likely to show up for flights in the next few hours.
+    """
+    adb = budget(state, now, cfg)
+    cost, cap = cfg["units_per_call"], cfg["monthly_budget_units"] - cfg["budget_reserve_units"]
+    calls_left = max(0, (cap - adb["units"]) // cost)
+    today = now.strftime("%Y-%m-%d")
+    if adb.get("day") != today:  # fix today's allowance once, at the first look of the day
+        adb["day"], adb["day_start_calls_left"] = today, calls_left
+    days_left = calendar.monthrange(now.year, now.month)[1] - now.day + 1
+    table = cfg["poll_schedule_utc"]
+    n = min(max(int(k) for k in table), adb["day_start_calls_left"] // days_left)
+    return n, (table[str(n)] if n >= 1 else []), calls_left, days_left
+
+
 def due(state, now, cfg):
-    """Return 'base', 'watch' or None (with the reason available via due_reason for logging)."""
+    """Return 'base', 'watch' or None."""
     return _due(state, now, cfg)[0]
 
 
@@ -44,12 +64,16 @@ def _due(state, now, cfg):
     cost, cap = cfg["units_per_call"], cfg["monthly_budget_units"] - cfg["budget_reserve_units"]
     if adb["units"] + cost > cap:
         return None, f"monthly budget exhausted ({adb['units']}/{cfg['monthly_budget_units']} units)"
+    n, anchors, calls_left, days_left = plan(state, now, cfg)
     last = datetime.fromisoformat(adb["last_poll"]) if adb.get("last_poll") else None
 
-    if last is None or last < _latest_anchor(now, cfg["base_poll_hours_utc"]):
-        return "base", "scheduled base poll"
+    if last is None:
+        return "base", "first poll"
+    if anchors and last < _latest_anchor(now, anchors):
+        return "base", f"scheduled poll ({n}/day today)"
 
-    # Extra polls: only while a flight we already know is special is about to operate (catch swaps).
+    # Extra polls: only while a flight we already know is special is about to operate (catch swaps),
+    # and only out of the slack left after every remaining base poll is paid for.
     if last <= now - timedelta(minutes=cfg["watch_interval_minutes"]):
         soon = [e for e in state["flights"].values() if e.get("livery") and _within(e, now, cfg)]
         if soon:
@@ -58,12 +82,10 @@ def _due(state, now, cfg):
                 adb["extras_day"], adb["extras_today"] = today, 0
             if adb["extras_today"] >= cfg["max_extra_calls_per_day"]:
                 return None, "extra-poll cap for today reached"
-            days_left = calendar.monthrange(now.year, now.month)[1] - now.day + 1
-            base_reserve = len(cfg["base_poll_hours_utc"]) * days_left * cost
-            if adb["units"] + cost + base_reserve > cap:
+            if calls_left - 1 < n * days_left:
                 return None, "extra poll would eat into the base-poll reserve"
             return "watch", "special-livery flight coming up"
-    return None, "nothing due"
+    return None, f"nothing due ({n} scheduled polls/day; {calls_left} calls left this month)"
 
 
 def _within(entry, now, cfg):

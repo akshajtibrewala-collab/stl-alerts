@@ -41,21 +41,36 @@ tail number assigned to each flight, and checks it against the same livery datab
 
 ### Staying inside the free tier
 
-The pass keeps a monthly unit ledger in `state/state.json` and never polls when it would exceed
-`schedule.monthly_budget_units - budget_reserve_units` (400 - 20). Each poll fetches a 12-hour window, 2 units.
+Measured on the RapidAPI **Basic** plan: **400 API units/month** (and 1,600 requests/month). A board call is **2 units
+regardless of its time window** (a 3 h window and a 12 h window both cost 2), so every poll asks for the full 12 h
+and the only levers are how many polls to make and when.
 
-| Poll | When | Cost/month |
-|---|---|---|
-| Base | 4 fixed times a day (`base_poll_hours_utc`: 10, 15, 20, 01 UTC = 5, 10, 15, 20 h CDT) | ~248 units |
-| Extra | up to 2/day, at most every 90 min, only while a flight already known to be special is within 3 h of its time, to catch a late swap. Only allowed if it can't starve the base polls. | uses the leftover ~130 |
+The pass spends the whole month's budget evenly. Each day it works out
+`floor(calls left / days left)` polls (at most 7, leaving a 20-unit reserve), and places them across the STL
+operating day at the UTC hours in `schedule.poll_schedule_utc`, just ahead of the departure banks:
 
-Tune these in `config/config.json` under `schedule`. If your plan is bigger, raise `monthly_budget_units`.
+| Polls/day | Times (CDT) |
+|---|---|
+| 6 (a normal month) | 6a, 9a, 12p, 3p, 6p, 9p |
+| 4 | 6a, 10a, 2p, 6p |
+| 1 | 12p |
+
+Frequency is deliberately higher in the daytime, because at STL tails show up mostly 0-3 hours before a flight,
+so a flight's tail is most likely to appear between polls that are only a few hours apart. Flights days out
+are not polled separately at all: they are simply not in the 12 h window.
+
+**Extra polls** (up to 2/day, at most every 90 min) happen only while a flight already known to be special is
+within 3 h of its time, to catch a late tail swap, and only out of budget left over after every remaining daily
+poll is paid for. The ledger reads the API's own remaining-units header after every call, so anything spent
+elsewhere (like a probe) is counted. If the API errors or rate-limits, the pass backs off for 2-3 hours and the
+ADS-B pass is unaffected.
+
 `state/lead_times.csv` records when each flight's tail first appeared; run `python scripts/lead_time_report.py`
 after a few days to see how far ahead tails really get assigned at STL.
 
 ### Setup for the schedule pass
 
-1. Get an AeroDataBox key. Per AeroDataBox's pricing page, the free route is **RapidAPI -> Basic plan**
+1. Get an AeroDataBox key. The free route (verified working) is **RapidAPI -> Basic plan**
    (400 units/month, "free forever"): open [rapid.aerodatabox.com](https://rapid.aerodatabox.com), sign in to
    RapidAPI, click **Subscribe** on the Basic plan, then copy the `X-RapidAPI-Key` from the code snippet.
    API.Market's Basic plan is only a 7-day trial, and AeroDataBox's own "direct" plans are paid (from $19/month)

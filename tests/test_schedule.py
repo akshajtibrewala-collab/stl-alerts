@@ -155,13 +155,13 @@ class CrossPassDedupe(unittest.TestCase):
 
 
 class Polling(unittest.TestCase):
-    def test_first_run_polls_then_waits_for_next_anchor(self):
+    def test_first_run_polls_then_follows_the_daily_schedule(self):
         s = new_state()
-        now = datetime(2026, 9, 21, 16, 0, tzinfo=timezone.utc)   # after the 15:00Z anchor
-        self.assertEqual(schedule.due(s, now, SCFG), "base")
+        now = datetime(2026, 9, 21, 16, 0, tzinfo=timezone.utc)
+        self.assertEqual(schedule.due(s, now, SCFG), "base")                     # first ever run
         schedule.record_poll(s, now, SCFG, "base")
-        self.assertIsNone(schedule.due(s, now + timedelta(hours=2), SCFG))
-        self.assertEqual(schedule.due(s, datetime(2026, 9, 21, 20, 5, tzinfo=timezone.utc), SCFG), "base")
+        self.assertIsNone(schedule.due(s, now + timedelta(minutes=30), SCFG))     # between anchors
+        self.assertEqual(schedule.due(s, datetime(2026, 9, 21, 17, 5, tzinfo=timezone.utc), SCFG), "base")
 
     def test_budget_exhaustion_stops_polling(self):
         s = new_state()
@@ -185,7 +185,7 @@ class Polling(unittest.TestCase):
         self.assertEqual(schedule.due(s, later, SCFG), "watch")
         for _ in range(SCFG["max_extra_calls_per_day"]):
             schedule.record_poll(s, later, SCFG, "watch")
-        self.assertIsNone(schedule.due(s, later + timedelta(minutes=100), SCFG))  # daily cap reached
+        self.assertNotEqual(schedule.due(s, later + timedelta(minutes=100), SCFG), "watch")  # daily cap reached
 
     def test_far_off_special_flight_does_not_trigger_extra_poll(self):
         s = new_state()
@@ -212,10 +212,33 @@ class Polling(unittest.TestCase):
         schedule.budget(s, NOW + timedelta(days=30), SCFG)
         self.assertEqual(s["adb"]["units"], 0)
 
-    def test_full_month_of_base_polls_fits_the_budget(self):
-        used = len(SCFG["base_poll_hours_utc"]) * 31 * SCFG["units_per_call"]
-        self.assertLessEqual(used, SCFG["monthly_budget_units"] - SCFG["budget_reserve_units"])
+    def test_daily_poll_count_follows_remaining_budget(self):
+        s = new_state()
+        n, anchors, calls_left, days_left = schedule.plan(s, datetime(2026, 10, 1, 0, 5, tzinfo=timezone.utc), SCFG)
+        self.assertEqual((n, calls_left, days_left), (6, 190, 31))
+        self.assertEqual(len(anchors), 6)
+        low = new_state()
+        schedule.budget(low, NOW, SCFG)
+        low["adb"]["units"] = 370          # only 5 calls left with 10 days to go -> under one a day
+        self.assertEqual(schedule.plan(low, NOW, SCFG)[0], 0)
+        self.assertIsNone(schedule.due({**low, "adb": {**low["adb"], "last_poll": NOW.isoformat()}}, NOW + timedelta(hours=8), SCFG))
 
+    def test_a_whole_month_of_scheduled_polls_never_exceeds_the_budget(self):
+        s = new_state()
+        total = 0
+        for day in range(1, 31):
+            now = datetime(2026, 9, day, 0, 5, tzinfo=timezone.utc)
+            n = schedule.plan(s, now, SCFG)[0]
+            for _ in range(n):
+                schedule.record_poll(s, now, SCFG, "base")
+            total += n
+        self.assertLessEqual(s["adb"]["units"], SCFG["monthly_budget_units"] - SCFG["budget_reserve_units"])
+        self.assertGreaterEqual(total, 170)   # and it actually uses (almost) all of it
+
+    def test_schedule_table_is_sane(self):
+        for k, hours in SCFG["poll_schedule_utc"].items():
+            self.assertEqual(len(hours), int(k))
+            self.assertEqual(len(set(hours)), len(hours))
 
 class Parsing(unittest.TestCase):
     def test_flight_keys_agree_across_passes(self):
