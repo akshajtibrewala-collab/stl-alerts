@@ -1,24 +1,25 @@
 {
   "adb": {
-    "calls": 1,
+    "calls": 2,
     "day": "2026-09-21",
     "day_start_calls_left": 178,
     "extras_day": "",
     "extras_today": 0,
     "last_headers": {
       "x-ratelimit-api-units-limit": "400",
-      "x-ratelimit-api-units-remaining": "376",
-      "x-ratelimit-api-units-reset": "2465703",
+      "x-ratelimit-api-units-remaining": "372",
+      "x-ratelimit-api-units-reset": "2462532",
       "x-ratelimit-rapid-free-plans-hard-limit-limit": "500000",
-      "x-ratelimit-rapid-free-plans-hard-limit-remaining": "499998",
-      "x-ratelimit-rapid-free-plans-hard-limit-reset": "2465703",
+      "x-ratelimit-rapid-free-plans-hard-limit-remaining": "499986",
+      "x-ratelimit-rapid-free-plans-hard-limit-reset": "2462532",
       "x-ratelimit-requests-limit": "1600",
-      "x-ratelimit-requests-remaining": "1598",
-      "x-ratelimit-requests-reset": "2465703"
+      "x-ratelimit-requests-remaining": "1586",
+      "x-ratelimit-requests-reset": "2462532"
     },
-    "last_poll": "2026-09-21T17:58:20+00:00",
+    "last_poll": "2026-09-21T18:51:12+00:00",
     "month": "2026-09",
-    "units": 24
+    "polls_today": 1,
+    "units": 28
   },
   "alerted": {},
   "ctl_since": "O3YBnU0MP6lK",
@@ -29,7 +30,7 @@
       "had_reg_at_first_sight": true,
       "livery": null,
       "reg": "N942NN",
-      "sched_utc": "2026-09-21T19:20:00+00:00"
+      "sched_utc": "2026-09-21T19:50:00+00:00"
     },
     "AAL1363|2026-09-21|D": {
       "alerted_reg": null,
@@ -100,7 +101,7 @@
       "first_seen": "2026-09-21T17:58:20+00:00",
       "had_reg_at_first_sight": false,
       "livery": null,
-      "reg": null,
+      "reg": "N838AW",
       "sched_utc": "2026-09-21T19:30:00+00:00"
     },
     "AAL2686|2026-09-21|A": {
@@ -156,8 +157,8 @@
       "first_seen": "2026-09-21T17:58:20+00:00",
       "had_reg_at_first_sight": false,
       "livery": null,
-      "reg": null,
-      "sched_utc": "2026-09-21T18:54:00+00:00"
+      "reg": "N953AN",
+      "sched_utc": "2026-09-21T19:14:00+00:00"
     },
     "AAL3739|2026-09-21|D": {
       "alerted_reg": null,
@@ -189,7 +190,7 @@
       "had_reg_at_first_sight": true,
       "livery": null,
       "reg": "N438YX",
-      "sched_utc": "2026-09-21T20:23:00+00:00"
+      "sched_utc": "2026-09-21T20:38:00+00:00"
     },
     "AAL4449|2026-09-21|D": {
       "alerted_reg": null,
@@ -319,6 +320,14 @@
       "reg": null,
       "sched_utc": "2026-09-21T23:41:00+00:00"
     },
+    "ACA8688|2026-09-21|D": {
+      "alerted_reg": null,
+      "first_seen": "2026-09-21T18:51:12+00:00",
+      "had_reg_at_first_sight": true,
+      "livery": null,
+      "reg": "C-GPJZ",
+      "sched_utc": "2026-09-21T18:50:00+00:00"
+    },
     "ACA8889|2026-09-21|A": {
       "alerted_reg": null,
       "first_seen": "2026-09-21T17:58:20+00:00",
@@ -332,7 +341,7 @@
       "first_seen": "2026-09-21T17:58:20+00:00",
       "had_reg_at_first_sight": false,
       "livery": null,
-      "reg": null,
+      "reg": "C-FLJZ",
       "sched_utc": "2026-09-21T19:40:00+00:00"
     },
     "ACA8891|2026-09-21|A": {
@@ -388,8 +397,8 @@
       "first_seen": "2026-09-21T17:58:20+00:00",
       "had_reg_at_first_sight": false,
       "livery": null,
-      "reg": null,
-      "sched_utc": "2026-09-21T23:38:00+00:00"
+      "reg": "N963AK",
+      "sched_utc": "2026-09-21T22:52:00+00:00"
     },
     "ASA674|2026-09-21|D": {
       "alerted_reg": null,
@@ -406,6 +415,14 @@
       "livery": null,
       "reg": "N89321",
       "sched_utc": "2026-09-21T18:56:00+00:00"
+    },
+    "ASH4060|2026-09-21|D": {
+      "alerted_reg": null,
+      "first_seen": "2026-09-21T18:51:12+00:00",
+      "had_reg_at_first_sight": true,
+      "livery": null,
+      "reg": "N89321",
+      "sched_utc": "2026-09-21T20:13:00+00:00"
     },
     "BY229|2026-09-21|A": {
       "alerted_reg": null,
@@ -444,7 +461,7 @@
       "first_seen": "2026-09-21T17:58:20+00:00",
       "had_reg_at_first_sight": false,
       "livery": null,
-      "reg": null,
+      "reg": "N978AT",
       "sched_utc": "2026-09-21T18:55:00+00:00"
     },
     "DAL1393|2026-09-21|A": {
@@ -509,15 +526,23 @@
       "had_reg_at_first_sight": true,
       "livery": null,
       "reg": "N126DU",
-      "sched_utc": "2026-09-21T18:38:00+00:00"
+      "sched_utc": "2026-09-21T18:42:00+00:00"
     },
     "DAL2455|2026-09-21|D": {
       "alerted_reg": null,
       "first_seen": "2026-09-21T17:58:20+00:00",
       "had_reg_at_first_sight": false,
       "livery": null,
-      "reg": null,
+      "reg": "N126DU",
       "sched_utc": "2026-09-21T19:25:00+00:00"
+    },
+    "DAL2666|2026-09-22|A": {
+      "alerted_reg": null,
+      "first_seen": "2026-09-21T18:51:12+00:00",
+      "had_reg_at_first_sight": false,
+      "livery": null,
+      "reg": null,
+      "sched_utc": "2026-09-22T05:44:00+00:00"
     },
     "DAL2822|2026-09-21|A": {
       "alerted_reg": null,
@@ -549,7 +574,7 @@
       "had_reg_at_first_sight": true,
       "livery": null,
       "reg": "N308SY",
-      "sched_utc": "2026-09-21T19:38:00+00:00"
+      "sched_utc": "2026-09-21T19:53:00+00:00"
     },
     "DAL3811|2026-09-21|D": {
       "alerted_reg": null,
@@ -596,8 +621,8 @@
       "first_seen": "2026-09-21T17:58:20+00:00",
       "had_reg_at_first_sight": false,
       "livery": null,
-      "reg": null,
-      "sched_utc": "2026-09-21T20:54:00+00:00"
+      "reg": "N925DZ",
+      "sched_utc": "2026-09-21T20:28:00+00:00"
     },
     "DAL543|2026-09-21|D": {
       "alerted_reg": null,
@@ -620,7 +645,7 @@
       "first_seen": "2026-09-21T17:58:20+00:00",
       "had_reg_at_first_sight": false,
       "livery": null,
-      "reg": null,
+      "reg": "N812DN",
       "sched_utc": "2026-09-21T19:30:00+00:00"
     },
     "DLH448|2026-09-21|A": {
@@ -655,6 +680,14 @@
       "reg": "N240QS",
       "sched_utc": "2026-09-21T21:36:00+00:00"
     },
+    "EJA439|2026-09-21|A": {
+      "alerted_reg": null,
+      "first_seen": "2026-09-21T18:51:12+00:00",
+      "had_reg_at_first_sight": true,
+      "livery": null,
+      "reg": "N439QS",
+      "sched_utc": "2026-09-21T22:25:00+00:00"
+    },
     "EJA688|2026-09-21|A": {
       "alerted_reg": null,
       "first_seen": "2026-09-21T17:58:20+00:00",
@@ -662,6 +695,14 @@
       "livery": null,
       "reg": "N688QS",
       "sched_utc": "2026-09-21T18:05:00+00:00"
+    },
+    "EJA688|2026-09-21|D": {
+      "alerted_reg": null,
+      "first_seen": "2026-09-21T18:51:12+00:00",
+      "had_reg_at_first_sight": true,
+      "livery": null,
+      "reg": "N688QS",
+      "sched_utc": "2026-09-21T20:00:00+00:00"
     },
     "EJA782|2026-09-21|D": {
       "alerted_reg": null,
@@ -694,6 +735,14 @@
       "livery": null,
       "reg": "N965QS",
       "sched_utc": "2026-09-21T18:30:00+00:00"
+    },
+    "ENY3944|2026-09-21|A": {
+      "alerted_reg": null,
+      "first_seen": "2026-09-21T18:51:12+00:00",
+      "had_reg_at_first_sight": true,
+      "livery": null,
+      "reg": "N238NN",
+      "sched_utc": "2026-09-21T21:13:00+00:00"
     },
     "FDY444|2026-09-21|A": {
       "alerted_reg": null,
@@ -732,7 +781,7 @@
       "first_seen": "2026-09-21T17:58:20+00:00",
       "had_reg_at_first_sight": false,
       "livery": null,
-      "reg": null,
+      "reg": "N719FR",
       "sched_utc": "2026-09-21T19:29:00+00:00"
     },
     "FFT4567|2026-09-21|D": {
@@ -758,6 +807,14 @@
       "livery": null,
       "reg": "N88AF",
       "sched_utc": "2026-09-21T21:19:00+00:00"
+    },
+    "LXJ378|2026-09-21|A": {
+      "alerted_reg": null,
+      "first_seen": "2026-09-21T18:51:12+00:00",
+      "had_reg_at_first_sight": true,
+      "livery": null,
+      "reg": "N378FX",
+      "sched_utc": "2026-09-21T20:05:00+00:00"
     },
     "LXJ384|2026-09-21|A": {
       "alerted_reg": null,
@@ -836,7 +893,7 @@
       "first_seen": "2026-09-21T17:58:20+00:00",
       "had_reg_at_first_sight": false,
       "livery": null,
-      "reg": null,
+      "reg": "N8960L",
       "sched_utc": "2026-09-21T20:45:00+00:00"
     },
     "SWA1375|2026-09-21|A": {
@@ -844,8 +901,8 @@
       "first_seen": "2026-09-21T17:58:20+00:00",
       "had_reg_at_first_sight": false,
       "livery": null,
-      "reg": null,
-      "sched_utc": "2026-09-21T22:55:00+00:00"
+      "reg": "N9009U",
+      "sched_utc": "2026-09-21T23:18:00+00:00"
     },
     "SWA1404|2026-09-21|A": {
       "alerted_reg": null,
@@ -972,8 +1029,8 @@
       "first_seen": "2026-09-21T17:58:20+00:00",
       "had_reg_at_first_sight": false,
       "livery": null,
-      "reg": null,
-      "sched_utc": "2026-09-21T23:05:00+00:00"
+      "reg": "N8313F",
+      "sched_utc": "2026-09-21T23:02:00+00:00"
     },
     "SWA2175|2026-09-21|A": {
       "alerted_reg": null,
@@ -1004,7 +1061,7 @@
       "first_seen": "2026-09-21T17:58:20+00:00",
       "had_reg_at_first_sight": false,
       "livery": null,
-      "reg": null,
+      "reg": "N8956Q",
       "sched_utc": "2026-09-21T20:55:00+00:00"
     },
     "SWA2303|2026-09-21|A": {
@@ -1013,15 +1070,15 @@
       "had_reg_at_first_sight": true,
       "livery": null,
       "reg": "N8848Q",
-      "sched_utc": "2026-09-21T18:33:00+00:00"
+      "sched_utc": "2026-09-21T18:40:00+00:00"
     },
     "SWA2317|2026-09-21|A": {
       "alerted_reg": null,
       "first_seen": "2026-09-21T17:58:20+00:00",
       "had_reg_at_first_sight": false,
       "livery": null,
-      "reg": null,
-      "sched_utc": "2026-09-21T23:05:00+00:00"
+      "reg": "N8829Q",
+      "sched_utc": "2026-09-21T22:38:00+00:00"
     },
     "SWA2319|2026-09-21|A": {
       "alerted_reg": null,
@@ -1068,7 +1125,7 @@
       "first_seen": "2026-09-21T17:58:20+00:00",
       "had_reg_at_first_sight": false,
       "livery": null,
-      "reg": null,
+      "reg": "N8739L",
       "sched_utc": "2026-09-21T21:00:00+00:00"
     },
     "SWA2530|2026-09-21|A": {
@@ -1093,14 +1150,14 @@
       "had_reg_at_first_sight": true,
       "livery": null,
       "reg": "N946WN",
-      "sched_utc": "2026-09-21T19:38:00+00:00"
+      "sched_utc": "2026-09-21T20:04:00+00:00"
     },
     "SWA2535|2026-09-21|D": {
       "alerted_reg": null,
       "first_seen": "2026-09-21T17:58:20+00:00",
       "had_reg_at_first_sight": false,
       "livery": null,
-      "reg": null,
+      "reg": "N946WN",
       "sched_utc": "2026-09-21T20:45:00+00:00"
     },
     "SWA2538|2026-09-21|A": {
@@ -1172,8 +1229,8 @@
       "first_seen": "2026-09-21T17:58:20+00:00",
       "had_reg_at_first_sight": false,
       "livery": null,
-      "reg": null,
-      "sched_utc": "2026-09-21T21:25:00+00:00"
+      "reg": "N8816Q",
+      "sched_utc": "2026-09-21T21:15:00+00:00"
     },
     "SWA2839|2026-09-21|D": {
       "alerted_reg": null,
@@ -1188,8 +1245,8 @@
       "first_seen": "2026-09-21T17:58:20+00:00",
       "had_reg_at_first_sight": false,
       "livery": null,
-      "reg": null,
-      "sched_utc": "2026-09-21T23:05:00+00:00"
+      "reg": "N8315C",
+      "sched_utc": "2026-09-21T22:45:00+00:00"
     },
     "SWA290|2026-09-21|A": {
       "alerted_reg": null,
@@ -1287,6 +1344,14 @@
       "reg": null,
       "sched_utc": "2026-09-22T02:55:00+00:00"
     },
+    "SWA3215|2026-09-22|A": {
+      "alerted_reg": null,
+      "first_seen": "2026-09-21T18:51:12+00:00",
+      "had_reg_at_first_sight": false,
+      "livery": null,
+      "reg": null,
+      "sched_utc": "2026-09-22T05:50:00+00:00"
+    },
     "SWA3266|2026-09-21|A": {
       "alerted_reg": null,
       "first_seen": "2026-09-21T17:58:20+00:00",
@@ -1300,8 +1365,8 @@
       "first_seen": "2026-09-21T17:58:20+00:00",
       "had_reg_at_first_sight": false,
       "livery": null,
-      "reg": null,
-      "sched_utc": "2026-09-21T23:20:00+00:00"
+      "reg": "N8517F",
+      "sched_utc": "2026-09-21T22:53:00+00:00"
     },
     "SWA3312|2026-09-21|A": {
       "alerted_reg": null,
@@ -1365,7 +1430,7 @@
       "had_reg_at_first_sight": true,
       "livery": null,
       "reg": "N8960L",
-      "sched_utc": "2026-09-21T19:35:00+00:00"
+      "sched_utc": "2026-09-21T20:10:00+00:00"
     },
     "SWA3449|2026-09-21|A": {
       "alerted_reg": null,
@@ -1380,8 +1445,8 @@
       "first_seen": "2026-09-21T17:58:20+00:00",
       "had_reg_at_first_sight": false,
       "livery": null,
-      "reg": null,
-      "sched_utc": "2026-09-21T23:00:00+00:00"
+      "reg": "N281WN",
+      "sched_utc": "2026-09-21T23:33:00+00:00"
     },
     "SWA3521|2026-09-21|D": {
       "alerted_reg": null,
@@ -1484,7 +1549,7 @@
       "first_seen": "2026-09-21T17:58:20+00:00",
       "had_reg_at_first_sight": false,
       "livery": null,
-      "reg": null,
+      "reg": "N207WN",
       "sched_utc": "2026-09-21T19:00:00+00:00"
     },
     "SWA3831|2026-09-21|D": {
@@ -1605,7 +1670,7 @@
       "had_reg_at_first_sight": true,
       "livery": null,
       "reg": "N8837Q",
-      "sched_utc": "2026-09-21T19:24:00+00:00"
+      "sched_utc": "2026-09-21T19:47:00+00:00"
     },
     "SWA4005|2026-09-21|D": {
       "alerted_reg": null,
@@ -1628,8 +1693,8 @@
       "first_seen": "2026-09-21T17:58:20+00:00",
       "had_reg_at_first_sight": false,
       "livery": null,
-      "reg": null,
-      "sched_utc": "2026-09-21T22:10:00+00:00"
+      "reg": "N7702A",
+      "sched_utc": "2026-09-21T21:45:00+00:00"
     },
     "SWA4074|2026-09-21|D": {
       "alerted_reg": null,
@@ -1684,8 +1749,8 @@
       "first_seen": "2026-09-21T17:58:20+00:00",
       "had_reg_at_first_sight": false,
       "livery": null,
-      "reg": null,
-      "sched_utc": "2026-09-21T20:35:00+00:00"
+      "reg": "N8523W",
+      "sched_utc": "2026-09-21T20:46:00+00:00"
     },
     "SWA4203|2026-09-21|A": {
       "alerted_reg": null,
@@ -1701,7 +1766,7 @@
       "had_reg_at_first_sight": true,
       "livery": null,
       "reg": "N8956Q",
-      "sched_utc": "2026-09-21T19:43:00+00:00"
+      "sched_utc": "2026-09-21T20:11:00+00:00"
     },
     "SWA4254|2026-09-21|A": {
       "alerted_reg": null,
@@ -1743,6 +1808,14 @@
       "reg": "N8682B",
       "sched_utc": "2026-09-21T20:42:00+00:00"
     },
+    "SWA4528|2026-09-22|A": {
+      "alerted_reg": null,
+      "first_seen": "2026-09-21T18:51:12+00:00",
+      "had_reg_at_first_sight": false,
+      "livery": null,
+      "reg": null,
+      "sched_utc": "2026-09-22T05:40:00+00:00"
+    },
     "SWA4585|2026-09-21|D": {
       "alerted_reg": null,
       "first_seen": "2026-09-21T17:58:20+00:00",
@@ -1773,7 +1846,7 @@
       "had_reg_at_first_sight": true,
       "livery": null,
       "reg": "N8314L",
-      "sched_utc": "2026-09-21T18:32:00+00:00"
+      "sched_utc": "2026-09-21T18:38:00+00:00"
     },
     "SWA674|2026-09-21|A": {
       "alerted_reg": null,
@@ -1844,16 +1917,16 @@
       "first_seen": "2026-09-21T17:58:20+00:00",
       "had_reg_at_first_sight": false,
       "livery": null,
-      "reg": null,
-      "sched_utc": "2026-09-21T21:34:00+00:00"
+      "reg": "N481UA",
+      "sched_utc": "2026-09-21T21:06:00+00:00"
     },
     "UAL2000|2026-09-21|A": {
       "alerted_reg": null,
       "first_seen": "2026-09-21T17:58:20+00:00",
       "had_reg_at_first_sight": false,
       "livery": null,
-      "reg": null,
-      "sched_utc": "2026-09-21T20:38:00+00:00"
+      "reg": "N35271",
+      "sched_utc": "2026-09-21T19:54:00+00:00"
     },
     "UAL2779|2026-09-21|D": {
       "alerted_reg": null,
@@ -1941,7 +2014,7 @@
       "had_reg_at_first_sight": true,
       "livery": null,
       "reg": "N549GJ",
-      "sched_utc": "2026-09-21T18:27:00+00:00"
+      "sched_utc": "2026-09-21T18:59:00+00:00"
     },
     "UAL4518|2026-09-21|A": {
       "alerted_reg": null,
