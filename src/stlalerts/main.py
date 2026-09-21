@@ -100,19 +100,24 @@ def run(args):
     acfg = cfg["alerts"]
     server = os.environ.get("NTFY_SERVER", "https://ntfy.sh")
     topic = os.environ.get("NTFY_TOPIC", "")
-    state_path = ROOT / "state" / "state.json"
+    state_path = Path(args.state_file) if args.state_file else ROOT / "state" / "state.json"
     state = st.load(state_path)
     now = st.now()
     ctl_url = f"{server}/{topic}-ctl"
 
     if args.test_notify:
-        m = {"registration": "N000TEST", "hex": "", "callsign": "TEST1", "airline": "Test Air",
-             "livery_name": "Test Livery", "aircraft_type": "B738", "phase": "arrival",
-             "dist_nm": 12, "alt_ft": 3400, "tag": "routine", "status": "active", "confidence": "verified"}
-        msg = notify.build_message(m, acfg["mute_hours"], ctl_url)
-        print(msg)
-        if topic:
-            print("sent:", notify.send(server, topic, msg))
+        live = {"registration": "N492AS", "hex": "", "callsign": "ASA388", "airline": "TEST ALERT",
+                "livery_name": "synthetic live alert", "aircraft_type": "B739", "phase": "inbound",
+                "dist_nm": 60, "alt_ft": 12000, "tag": "routine", "status": "active", "confidence": "verified"}
+        plan = {"alert_type": "planned", "registration": "N492AS", "livery_name": "synthetic planned alert",
+                "airline": "TEST ALERT", "flight_number": "AS 388", "direction": "Arrival", "other_airport": "SEA",
+                "scheduled": "Mon 2:10 PM", "gate": "", "terminal": "1", "tag": "routine", "status": "active",
+                "confidence": "verified", "old_reg": None, "new_reg": "N492AS", "old_livery": None, "new_livery": None}
+        for msg in (notify.build_message(live, acfg["mute_hours"], ctl_url),
+                    notify.build_schedule_message(plan, acfg["mute_hours"], ctl_url)):
+            print(msg["title"], "| click ->", msg["click"])
+            if topic:
+                print("sent:", notify.send(server, topic, msg))
         return 0
 
     if topic and not args.dry_run:
@@ -159,9 +164,6 @@ def run(args):
         if not st.should_alert(state, m, acfg["cooldown_hours"]):
             print(f"suppressed (muted/duplicate): {m['registration']} {m['callsign']}")
             continue
-        if st.planned_covers(state, m["registration"], m["callsign"], now):
-            print(f"suppressed (already sent as a planned alert): {m['registration']} {m['callsign']}")
-            continue
         deliver(notify.build_message(m, acfg["mute_hours"], ctl_url), on_ok=lambda m=m: st.record(state, m))
 
     # Touch state monthly so the repo shows activity (GitHub pauses idle cron workflows).
@@ -178,7 +180,8 @@ def cli():
     p.add_argument("--fixture", help="adsb.lol-shaped JSON instead of a live ADS-B call")
     p.add_argument("--schedule-fixture", help="AeroDataBox FIDS-shaped JSON instead of a live (unit-spending) call")
     p.add_argument("--force-schedule", action="store_true", help="poll AeroDataBox now even if not due (spends units)")
-    p.add_argument("--test-notify", action="store_true", help="send one fake alert to verify the phone")
+    p.add_argument("--state-file", help="use this state JSON instead of state/state.json (tests)")
+    p.add_argument("--test-notify", action="store_true", help="send one fake live + one fake planned alert (real tail, so the tap link opens)")
     sys.exit(run(p.parse_args()))
 
 

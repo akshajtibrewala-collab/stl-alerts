@@ -11,7 +11,7 @@ St. Louis Lambert (STL). Runs every ~10 minutes on GitHub Actions, reads free AD
 3. Phase is classified from position/altitude/heading: `inbound` (descending toward STL, <=120 nm),
    `arrival`/`departure` (<=40 nm), `ground` (<=4 nm, on the surface). High-altitude overflights are ignored.
 4. Duplicates are suppressed per tail+callsign for 6 h; muted tails are skipped.
-5. Alert -> ntfy, with a **Mute 24h** button.
+5. Alert -> ntfy (titled `Live: ...`), with a **Mute 24h** button; tapping it opens FlightRadar24 for the tail.
 
 `watch_airlines` in `config/config.json` only sets the "routine" vs "possible diversion" wording and sort order.
 It never decides whether an alert fires.
@@ -33,8 +33,13 @@ tail number assigned to each flight, and checks it against the same livery datab
   * special -> standard: **Swapped OUT**
   * special -> a different special: one combined **Livery changed** alert
   * unchanged tail: nothing, ever.
-* **One flight, one alert.** Both passes normalise flights to one key (`WN 283` = `SWA283`). If either pass
-  has already alerted about a tail on a flight, the other stays quiet. Muting a tail silences both passes.
+* **Planned and Live are different alerts and never block each other.** The schedule pass sends **Planned**
+  (a tail was assigned; the plane may not even have left yet). Later, when the ADS-B pass actually sees that
+  tail flying near STL, you get a separate **Live** alert, even if you were already sent the Planned one. Only true
+  duplicates are suppressed: the same pass reporting the same flight twice (ADS-B: same tail + callsign within 6 h;
+  schedule: an unchanged tail on the same flight). Muting a tail silences both passes.
+* **Tap any alert to open FlightRadar24** for that tail (`https://www.flightradar24.com/data/aircraft/<TAIL>`),
+  via ntfy's `Click` header. The Mute button is a separate action button.
 * **If a send fails,** the flight's tracking is rolled back so the next poll retries it.
 * **Independent passes.** Each pass is wrapped so an AeroDataBox error, rate limit or quota problem is logged and
   skipped (the API is then left alone for 2-3 hours) and the ADS-B pass carries on.
@@ -82,6 +87,7 @@ after a few days to see how far ahead tails really get assigned at STL.
    It shows how many flights have a tail, whether gate/terminal are populated, and the rate-limit headers.
 4. Offline test with no key: `python stl_alerts.py --dry-run --schedule-fixture some_fids.json`
    (`--force-schedule` really calls the API even in `--dry-run`).
+5. `python stl_alerts.py --test-notify` sends one synthetic Live and one synthetic Planned alert (tail N492AS) so you can tap-test both.
 
 ## Setup
 

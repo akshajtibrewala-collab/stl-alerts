@@ -193,9 +193,6 @@ def process(flights, state, by_reg, by_hex, watch_codes, now, cfg, lead_rows):
         subject = old_reg if kind == "swap_out" else reg
         if st.is_muted(state, subject, now):
             continue
-        if kind != "swap_out" and st.live_alerted(state, reg, f["flight_key"]):
-            ent["alerted_reg"] = reg   # the ADS-B pass already told you about this tail on this flight
-            continue
         a = _alert(kind, f, row, watch_codes, registration=subject, livery_name=livery or old_livery,
                    old_reg=old_reg, old_livery=old_livery, new_reg=reg, new_livery=livery)
         if kind != "swap_out":

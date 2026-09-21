@@ -115,7 +115,9 @@ class Notify(unittest.TestCase):
              "alt_ft": 3400, "tag": "diversion?", "status": "active", "confidence": "verified"}
         msg = notify.build_message(m, 24, "https://ntfy.sh/secret-ctl")
         self.assertIn("Louisiana One", msg["title"])
-        self.assertIn("Arrival (possible diversion)", msg["body"])
+        self.assertIn("Now arriving at STL (possible diversion)", msg["body"])
+        self.assertTrue(msg["title"].startswith("Live: "))
+        self.assertEqual(msg["click"], "https://www.flightradar24.com/data/aircraft/N8977G")
         self.assertIn("body=mute N8977G 24", msg["actions"])
         msg["title"].encode("latin-1")  # HTTP headers must be latin-1 safe
 

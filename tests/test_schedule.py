@@ -130,21 +130,70 @@ class TailTracking(unittest.TestCase):
         self.assertEqual(alerts[0]["tag"], "diversion?")
 
 
-class CrossPassDedupe(unittest.TestCase):
-    def test_live_alert_already_sent_suppresses_planned(self):
-        s = new_state()
-        st.record(s, {"registration": "N8977G", "callsign": "SWA283"}, NOW)
-        alerts, _ = poll(s, fids())
-        self.assertEqual(alerts, [])
-        self.assertEqual(s["flights"]["SWA283|2026-09-21|D"]["alerted_reg"], "N8977G")
+class CrossPassAlerts(unittest.TestCase):
+    """A Planned alert (schedule) and a Live alert (ADS-B) are different alerts and must never block each other."""
 
-    def test_planned_alert_suppresses_later_adsb_for_same_flight(self):
+    def test_planned_alert_does_not_suppress_the_schedule_pass_after_a_live_alert(self):
         s = new_state()
-        poll(s, fids())
-        self.assertTrue(st.planned_covers(s, "N8977G", "SWA283 ", NOW + timedelta(hours=8)))
-        self.assertFalse(st.planned_covers(s, "N8977G", "SWA999", NOW))       # different flight
-        self.assertFalse(st.planned_covers(s, "N1776R", "SWA283", NOW))       # different tail
-        self.assertFalse(st.planned_covers(s, "N8977G", "N8977G", NOW))       # tail-number callsign
+        st.record(s, {"registration": "N8977G", "callsign": "SWA283"}, NOW)   # ADS-B already alerted
+        alerts, _ = poll(s, fids())
+        self.assertEqual([a["alert_type"] for a in alerts], ["planned"])
+
+    def test_planned_then_live_produces_two_distinct_alerts(self):
+        import tempfile
+        from unittest import mock
+        from stlalerts import main as stmain
+        real_now = st.now()
+        sched_local = (real_now + timedelta(hours=2)).astimezone(timezone(timedelta(hours=-5)))
+        board = fids(utc=(real_now + timedelta(hours=2)).strftime("%Y-%m-%d %H:%MZ"),
+                     local=sched_local.strftime("%Y-%m-%d %H:%M-05:00"))
+        # ADS-B: the same tail, flight SWA283, now 20 nm south of STL heading north and descending
+        live_ac = {"ac": [{"hex": "aa8977", "r": "N8977G", "flight": "SWA283 ", "t": "B38M", "lat": 38.42,
+                           "lon": -90.37, "alt_baro": 3400, "baro_rate": -700, "track": 2}]}
+        empty_ac = {"ac": []}
+        tmp = Path(tempfile.mkdtemp())
+        files = {n: tmp / f"{n}.json" for n in ("board", "live", "empty", "state")}
+        files["board"].write_text(json.dumps(board))
+        files["live"].write_text(json.dumps(live_ac))
+        files["empty"].write_text(json.dumps(empty_ac))
+
+        def run(adsb_file):
+            sent = []
+            args = type("A", (), dict(dry_run=False, fixture=str(files[adsb_file]), schedule_fixture=str(files["board"]),
+                                      force_schedule=False, test_notify=False, state_file=str(files["state"])))()
+            with mock.patch.dict("os.environ", {"NTFY_TOPIC": "t", "NTFY_SERVER": "https://ntfy.example"}),                     mock.patch.object(stmain.notify, "send", side_effect=lambda srv, topic, msg: sent.append(msg)),                     mock.patch.object(stmain.notify, "apply_control_messages", return_value=[]),                     mock.patch.object(stmain, "LEAD_CSV", tmp / "lead.csv"):
+                stmain.run(args)
+            return [m["title"] for m in sent]
+
+        first = run("empty")    # schedule pass sees the tail; nothing airborne yet
+        self.assertEqual(len(first), 1)
+        self.assertTrue(first[0].startswith("Planned: Louisiana One"))
+        second = run("live")    # ADS-B now sees the same tail in the air: must NOT be suppressed
+        self.assertEqual(len(second), 1)
+        self.assertTrue(second[0].startswith("Live: Louisiana One"))
+        self.assertEqual(run("live"), [])   # a true duplicate (same pass, same flight) stays deduped
+        self.assertEqual(run("empty"), [])  # and the unchanged tail never re-sends the Planned alert
+
+    def test_every_alert_type_opens_flightradar24_for_its_tail(self):
+        base = {"alert_type": "planned", "registration": "N8977G", "livery_name": "L", "airline": "A",
+                "flight_number": "WN 1", "direction": "Departure", "other_airport": "MDW", "scheduled": "x",
+                "gate": "", "terminal": "", "tag": "routine", "status": "active", "confidence": "verified",
+                "old_reg": "N1", "new_reg": "N8977G", "old_livery": "Old", "new_livery": "L"}
+        for kind, tail in (("planned", "N8977G"), ("swap_in", "N8977G"), ("swap_change", "N8977G"), ("swap_out", "N1")):
+            msg = notify.build_schedule_message({**base, "alert_type": kind}, 24, "u")
+            self.assertEqual(msg["click"], f"https://www.flightradar24.com/data/aircraft/{tail}", kind)
+
+    def test_click_and_actions_are_sent_as_ntfy_headers(self):
+        from unittest import mock
+        fake = mock.MagicMock()
+        fake.__enter__.return_value.status = 200
+        msg = {"title": "T", "body": "b", "tags": "airplane", "priority": "4",
+               "click": "https://www.flightradar24.com/data/aircraft/N492AS", "actions": "http, Mute 24h, u"}
+        with mock.patch("urllib.request.urlopen", return_value=fake) as uo:
+            notify.send("https://ntfy.sh", "topic", msg)
+        req = uo.call_args[0][0]
+        self.assertEqual(req.get_header("Click"), "https://www.flightradar24.com/data/aircraft/N492AS")
+        self.assertEqual(req.get_header("Actions"), "http, Mute 24h, u")
 
     def test_failed_send_is_rolled_back_and_retried(self):
         s = new_state()

@@ -11,24 +11,30 @@ import urllib.request
 from . import state as st
 
 PHASE_LABEL = {
-    "arrival": "Arrival", "departure": "Departure",
+    "arrival": "Now arriving at STL", "departure": "Now departing STL",
     "ground": "On the ground at STL", "inbound": "Inbound to STL",
 }
 
 
+def flightradar24_url(reg):
+    """Tapping any alert opens FlightRadar24's live page for this tail."""
+    return f"https://www.flightradar24.com/data/aircraft/{reg}"
+
+
 def build_message(m, mute_hours, ctl_url):
+    """Live sighting from the ADS-B pass. Always titled 'Live:' so it is never mistaken for a plan."""
     tag = " (possible diversion)" if m["tag"] == "diversion?" else ""
-    title = f"Special livery: {m['livery_name']} ({m['registration']})"
+    title = f"Live: {m['livery_name']} ({m['registration']})"
     lines = [
         f"{m['airline']} {m['callsign'] or 'no callsign'} - {PHASE_LABEL[m['phase']]}{tag}",
-        f"{m['aircraft_type']}  {m['dist_nm']:.0f} nm from STL, "
+        f"LIVE sighting (ADS-B): {m['aircraft_type']}  {m['dist_nm']:.0f} nm from STL, "
         + ("on ground" if m["alt_ft"] == "ground" else f"{m['alt_ft']:,} ft"),
     ]
     if m.get("scheduled"):
         lines.append(f"Scheduled {m['scheduled']}" + (f", gate {m['gate']}" if m.get("gate") else ""))
     if m["status"] != "active" or m["confidence"] != "verified":
         lines.append("Note: livery entry is not hand-verified; the tail may have been repainted.")
-    click = f"https://globe.adsb.lol/?icao={m['hex']}" if m.get("hex") else ""
+    click = flightradar24_url(m["registration"])
     actions = f"http, Mute {mute_hours}h, {ctl_url}, method=POST, body=mute {m['registration']} {mute_hours}, clear=true"
     return {
         "title": title, "body": "\n".join(lines), "click": click,
@@ -50,8 +56,8 @@ def build_schedule_message(a, mute_hours, ctl_url):
     if kind == "planned":
         title = f"Planned: {a['livery_name']} ({a['registration']})"
         lines = [f"{flight}{div}", f"Scheduled {when}",
-                 "PLANNED from the schedule, not a live sighting. The tail can still be swapped; "
-                 "you'll get a follow-up if it changes."]
+                 "PLANNED from the schedule, not a live sighting. The tail can still be swapped. "
+                 "You'll get a separate LIVE alert when it's actually spotted flying near STL."]
     elif kind == "swap_in":
         title = f"Swapped IN: {a['livery_name']} ({a['registration']})"
         lines = [f"{flight}{div}", f"Scheduled {when}",
@@ -70,7 +76,7 @@ def build_schedule_message(a, mute_hours, ctl_url):
     return {
         "title": title, "body": "\n".join(lines), "tags": "calendar,airplane",
         "priority": "4" if kind != "planned" else "3",
-        "click": f"https://www.flightaware.com/live/flight/{tail}",
+        "click": flightradar24_url(tail),
         "actions": f"http, Mute {mute_hours}h, {ctl_url}, method=POST, body=mute {a['registration']} {mute_hours}, clear=true",
     }
 
