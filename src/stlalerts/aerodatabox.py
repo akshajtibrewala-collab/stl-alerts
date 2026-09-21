@@ -65,7 +65,9 @@ class Client:
         try:
             with urllib.request.urlopen(req, timeout=45) as r:
                 hdrs = {k.lower(): v for k, v in r.headers.items() if "ratelimit" in k.lower() or "unit" in k.lower()}
-                return json.load(r), hdrs
+                body = r.read()
+                # 204 No Content = nothing scheduled in the window; that is a valid, empty board.
+                return (json.loads(body) if r.status != 204 and body.strip() else {}), hdrs
         except urllib.error.HTTPError as e:
             raise AeroDataBoxError(e.code, e.read().decode("utf-8", "replace"))
 

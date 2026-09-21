@@ -199,6 +199,12 @@ class Polling(unittest.TestCase):
         schedule.record_poll(s, NOW, SCFG, "base")
         self.assertIsNone(schedule.due(s, NOW + timedelta(minutes=100), SCFG))
 
+    def test_ledger_syncs_to_the_apis_own_unit_count(self):
+        s = new_state()
+        schedule.record_poll(s, NOW, SCFG, "base", {"x-ratelimit-api-units-limit": "400",
+                                                    "x-ratelimit-api-units-remaining": "384"})
+        self.assertEqual(s["adb"]["units"], 16)
+
     def test_month_rollover_resets_ledger(self):
         s = new_state()
         schedule.record_poll(s, NOW, SCFG, "base")
@@ -230,6 +236,16 @@ class Parsing(unittest.TestCase):
         self.assertEqual(f[0]["reg"], "")
         self.assertEqual(f[0]["local_date"], "2026-09-21")
         self.assertIsNone(f[1]["flight_key"])
+
+    def test_empty_204_response_is_an_empty_board_not_a_crash(self):
+        from unittest import mock
+        fake = mock.MagicMock()
+        r = fake.__enter__.return_value
+        r.status, r.read.return_value, r.headers = 204, b"", {"X-RateLimit-API-Units-Remaining": "388"}
+        with mock.patch("urllib.request.urlopen", return_value=fake):
+            data, hdrs = aerodatabox.Client("k", "rapidapi").fids("KSTL", 0, 1)
+        self.assertEqual(aerodatabox.parse_fids(data), [])
+        self.assertEqual(hdrs["x-ratelimit-api-units-remaining"], "388")
 
     def test_state_json_roundtrip_survives(self):
         s = new_state()

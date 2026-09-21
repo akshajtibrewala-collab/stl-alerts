@@ -81,6 +81,11 @@ def record_poll(state, now, cfg, reason, headers=None):
         adb["extras_today"] = adb.get("extras_today", 0) + 1
     if headers:
         adb["last_headers"] = headers
+        try:  # the API's own count is authoritative (also covers units spent outside this job, e.g. probes)
+            limit = int(headers["x-ratelimit-api-units-limit"])
+            adb["units"] = limit - int(headers["x-ratelimit-api-units-remaining"])
+        except (KeyError, ValueError):
+            pass
 
 
 def block(state, now, hours):
