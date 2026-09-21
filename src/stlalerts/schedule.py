@@ -26,66 +26,89 @@ def budget(state, now, cfg):
     return adb
 
 
-def _latest_anchor(now, hours):
-    cands = [now.replace(hour=h, minute=0, second=0, microsecond=0) - timedelta(days=d)
-             for h in hours for d in (0, 1)]
-    return max(c for c in cands if c <= now)
+def _ops(now, p):
+    """Position inside the STL operating window (UTC hours ops_start_utc -> ops_end_utc, may cross midnight)."""
+    start, end = p["ops_start_utc"], p["ops_end_utc"]
+    length = (end - start) % 24 or 24
+    day_start = now.replace(hour=start, minute=0, second=0, microsecond=0)
+    if day_start > now:
+        day_start -= timedelta(days=1)
+    return day_start.strftime("%Y-%m-%d"), (now - day_start).total_seconds() / 3600, length
 
 
 def plan(state, now, cfg):
-    """Spend the whole month's budget evenly: how many base polls per day, and at which UTC hours.
+    """How many polls today, from the month's remaining budget: floor(calls left / days left), capped.
 
-    A poll costs the same whatever its time window (measured: 3 h and 12 h windows both cost 2 units), so
-    every poll asks for the full 12 h and the only levers are how many polls and when. Polls are placed across
-    the STL operating day (see poll_schedule_utc), just ahead of the departure banks, because that is when
-    freshly assigned tails are most likely to show up for flights in the next few hours.
+    A poll costs the same whatever its time window (measured: 3 h and 12 h windows both cost 2 units), so every
+    poll asks for the full 12 h and the only levers are how many polls to make and when.
     """
     adb = budget(state, now, cfg)
     cost, cap = cfg["units_per_call"], cfg["monthly_budget_units"] - cfg["budget_reserve_units"]
     calls_left = max(0, (cap - adb["units"]) // cost)
-    today = now.strftime("%Y-%m-%d")
-    if adb.get("day") != today:  # fix today's allowance once, at the first look of the day
-        adb["day"], adb["day_start_calls_left"] = today, calls_left
+    ops_day = _ops(now, cfg["pacing"])[0]
+    if adb.get("day") != ops_day:  # fix today's allowance once, at the first look of the (operating) day
+        adb.update(day=ops_day, day_start_calls_left=calls_left, polls_today=0, extras_today=0)
     days_left = calendar.monthrange(now.year, now.month)[1] - now.day + 1
-    table = cfg["poll_schedule_utc"]
-    n = min(max(int(k) for k in table), adb["day_start_calls_left"] // days_left)
-    return n, (table[str(n)] if n >= 1 else []), calls_left, days_left
+    n = min(cfg["pacing"]["max_per_day"], adb["day_start_calls_left"] // days_left)
+    return n, calls_left, days_left
+
+
+def pending(state, now, cfg):
+    """Flights scheduled within the next few hours that still have no tail assigned (as of the last poll)."""
+    horizon = timedelta(hours=cfg["pacing"]["pending_horizon_hours"])
+    return sum(1 for e in state["flights"].values()
+               if e.get("reg") is None and now - timedelta(minutes=5) <= datetime.fromisoformat(e["sched_utc"]) <= now + horizon)
 
 
 def due(state, now, cfg):
-    """Return 'base', 'watch' or None."""
+    """Return 'catch', 'base', 'watch' or None."""
     return _due(state, now, cfg)[0]
 
 
 def _due(state, now, cfg):
+    """Decide whether to spend a poll now, and why.
+
+    The day's allowance of n polls is released steadily across the operating window (a token bucket that starts
+    with one token), so the month's budget is never overspent. A released poll is only SPENT once enough flights
+    in the next few hours are still missing a tail (they're the ones a fresh look can resolve), or after a long
+    quiet gap as a safety net. Tokens saved during a lull are spent when the next departure bank builds up.
+    """
     adb = budget(state, now, cfg)
     if adb.get("blocked_until") and datetime.fromisoformat(adb["blocked_until"]) > now:
         return None, f"backing off until {adb['blocked_until']}"
     cost, cap = cfg["units_per_call"], cfg["monthly_budget_units"] - cfg["budget_reserve_units"]
     if adb["units"] + cost > cap:
         return None, f"monthly budget exhausted ({adb['units']}/{cfg['monthly_budget_units']} units)"
-    n, anchors, calls_left, days_left = plan(state, now, cfg)
+    n, calls_left, days_left = plan(state, now, cfg)
+    p = cfg["pacing"]
     last = datetime.fromisoformat(adb["last_poll"]) if adb.get("last_poll") else None
-
     if last is None:
         return "base", "first poll"
-    if anchors and last < _latest_anchor(now, anchors):
-        return "base", f"scheduled poll ({n}/day today)"
 
-    # Extra polls: only while a flight we already know is special is about to operate (catch swaps),
-    # and only out of the slack left after every remaining base poll is paid for.
+    _, elapsed, length = _ops(now, p)
+    gap = (now - last).total_seconds() / 60
+    if n >= 1 and elapsed < length and gap >= p["min_gap_minutes"]:
+        # Tokens accrue over the window minus a short tail, so the day's last poll is actually reachable.
+        frac = min(1.0, elapsed / max(0.5, length - p["last_poll_before_end_minutes"] / 60))
+        tokens = (n - 1) * frac + 1 - adb.get("polls_today", 0)
+        if tokens >= 1:
+            waiting = pending(state, now, cfg)
+            if waiting >= p["min_pending"]:
+                return "catch", f"{waiting} flights in the next {p['pending_horizon_hours']} h have no tail yet"
+            if gap >= p["max_gap_minutes"]:
+                return "base", f"safety poll after {gap / 60:.1f} h"
+
+    # Swap watch: a flight already known to be special is about to operate. Paid only from slack left
+    # after every remaining daily poll is covered, so it can never starve the pacing above.
     if last <= now - timedelta(minutes=cfg["watch_interval_minutes"]):
-        soon = [e for e in state["flights"].values() if e.get("livery") and _within(e, now, cfg)]
-        if soon:
-            today = now.strftime("%Y-%m-%d")
-            if adb.get("extras_day") != today:
-                adb["extras_day"], adb["extras_today"] = today, 0
-            if adb["extras_today"] >= cfg["max_extra_calls_per_day"]:
-                return None, "extra-poll cap for today reached"
+        if any(e.get("livery") and _within(e, now, cfg) for e in state["flights"].values()):
+            if adb.get("extras_today", 0) >= cfg["max_extra_calls_per_day"]:
+                return None, "swap-watch cap for today reached"
             if calls_left - 1 < n * days_left:
-                return None, "extra poll would eat into the base-poll reserve"
+                return None, "swap-watch poll would eat into the daily allowance"
             return "watch", "special-livery flight coming up"
-    return None, f"nothing due ({n} scheduled polls/day; {calls_left} calls left this month)"
+    return None, (f"nothing due ({n} polls/day, {adb.get('polls_today', 0)} used; "
+                  f"{calls_left} calls left this month)")
 
 
 def _within(entry, now, cfg):
@@ -95,8 +118,10 @@ def _within(entry, now, cfg):
 
 def record_poll(state, now, cfg, reason, headers=None):
     adb = budget(state, now, cfg)
+    plan(state, now, cfg)  # makes sure the per-day counters belong to today
     adb["units"] += cfg["units_per_call"]
     adb["calls"] += 1
+    adb["polls_today"] = adb.get("polls_today", 0) + 1
     adb["last_poll"] = _iso(now)
     adb.pop("blocked_until", None)
     if reason == "watch":

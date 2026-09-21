@@ -203,20 +203,101 @@ class CrossPassAlerts(unittest.TestCase):
         self.assertEqual([a["alert_type"] for a in retry], ["planned"])
 
 
+def pend(state, now, k, hours=1.0):
+    """k flights leaving `hours` from now that have no tail assigned yet."""
+    state["flights"] = {f"X{i}|d|D": {"reg": None, "livery": None, "sched_utc": (now + timedelta(hours=hours)).isoformat()}
+                        for i in range(k)}
+
+
 class Polling(unittest.TestCase):
-    def test_first_run_polls_then_follows_the_daily_schedule(self):
+    DAY = datetime(2026, 9, 22, 11, 0, tzinfo=timezone.utc)   # 6 AM CDT: start of the operating day
+
+    def served(self, at=None):
+        """State whose last poll was at the start of the day."""
         s = new_state()
-        now = datetime(2026, 9, 21, 16, 0, tzinfo=timezone.utc)
-        self.assertEqual(schedule.due(s, now, SCFG), "base")                     # first ever run
-        schedule.record_poll(s, now, SCFG, "base")
-        self.assertIsNone(schedule.due(s, now + timedelta(minutes=30), SCFG))     # between anchors
-        self.assertEqual(schedule.due(s, datetime(2026, 9, 21, 17, 5, tzinfo=timezone.utc), SCFG), "base")
+        schedule.record_poll(s, at or self.DAY, SCFG, "base")
+        return s
+
+    def test_first_run_polls_immediately(self):
+        self.assertEqual(schedule.due(new_state(), self.DAY, SCFG), "base")
+
+    def test_catch_poll_when_departing_flights_still_have_no_tail(self):
+        s = self.served()
+        now = self.DAY + timedelta(hours=2)
+        pend(s, now, 6)                                     # 6 flights due within 3 h, no tail yet
+        self.assertEqual(schedule.due(s, now, SCFG), "catch")
+
+    def test_no_catch_poll_when_few_flights_are_waiting(self):
+        s = self.served()
+        now = self.DAY + timedelta(hours=2)
+        pend(s, now, 2)                                     # below min_pending
+        self.assertIsNone(schedule.due(s, now, SCFG))
+
+    def test_flights_beyond_the_horizon_do_not_count_as_pending(self):
+        s = self.served()
+        now = self.DAY + timedelta(hours=2)
+        pend(s, now, 20, hours=6)                           # lots of flights, but hours away
+        self.assertIsNone(schedule.due(s, now, SCFG))
+
+    def test_safety_poll_after_a_long_quiet_gap(self):
+        s = self.served()
+        self.assertEqual(schedule.due(s, self.DAY + timedelta(hours=4, minutes=30), SCFG), "base")
+
+    def test_lull_saves_the_poll_for_when_the_bank_builds(self):
+        s = self.served()
+        self.assertIsNone(schedule.due(s, self.DAY + timedelta(hours=3, minutes=30), SCFG))   # lull: nothing waiting
+        now = self.DAY + timedelta(hours=3, minutes=31)
+        pend(s, now, 8)                                     # a departure bank appears: the saved poll is spent now
+        self.assertEqual(schedule.due(s, now, SCFG), "catch")
+
+    def test_min_gap_between_polls(self):
+        s = self.served()
+        now = self.DAY + timedelta(minutes=30)
+        pend(s, now, 9)
+        self.assertIsNone(schedule.due(s, now, SCFG))
+
+    def test_no_polling_outside_the_operating_window(self):
+        s = self.served()
+        night = datetime(2026, 9, 23, 6, 0, tzinfo=timezone.utc)   # 1 AM CDT
+        pend(s, night, 9)
+        self.assertIsNone(schedule.due(s, night, SCFG))
+
+    def test_a_day_of_polling_never_exceeds_the_allowance(self):
+        s = new_state()
+        n = None
+        polls = 0
+        t = self.DAY
+        for _ in range(16 * 12):                            # every 5 minutes for the 16 h operating window
+            pend(s, t, 9)                                   # worst case: flights always waiting
+            if schedule.due(s, t, SCFG):
+                n = schedule.plan(s, t, SCFG)[0]
+                schedule.record_poll(s, t, SCFG, "catch")
+                polls += 1
+            t += timedelta(minutes=5)
+        self.assertLessEqual(polls, n)
+        self.assertGreaterEqual(polls, n - 1)               # and it really spends the allowance
+
+    def test_polls_cluster_when_more_flights_are_waiting(self):
+        """Same allowance, but polls land where flights are waiting, not on a fixed clock."""
+        s = new_state()
+        times = []
+        t = self.DAY
+        for _ in range(16 * 12):
+            busy = 9 if 4 <= (t - self.DAY).total_seconds() / 3600 < 9 else 1   # a midday bank, quiet otherwise
+            pend(s, t, busy)
+            if schedule.due(s, t, SCFG):
+                times.append(t)
+                schedule.record_poll(s, t, SCFG, "catch")
+            t += timedelta(minutes=5)
+        inside = [x for x in times if 4 <= (x - self.DAY).total_seconds() / 3600 < 9]
+        self.assertGreater(len(inside), len(times) / 2)
 
     def test_budget_exhaustion_stops_polling(self):
-        s = new_state()
-        schedule.budget(s, NOW, SCFG)
+        s = self.served()
         s["adb"]["units"] = SCFG["monthly_budget_units"] - SCFG["budget_reserve_units"] - 1
-        self.assertIsNone(schedule.due(s, NOW, SCFG))
+        now = self.DAY + timedelta(hours=2)
+        pend(s, now, 9)
+        self.assertIsNone(schedule.due(s, now, SCFG))
 
     def test_backoff_blocks_until_expiry(self):
         s = new_state()
@@ -224,29 +305,49 @@ class Polling(unittest.TestCase):
         self.assertIsNone(schedule.due(s, NOW + timedelta(hours=1), SCFG))
         self.assertEqual(schedule.due(s, NOW + timedelta(hours=3), SCFG), "base")
 
-    def test_extra_poll_when_special_flight_is_near_but_capped(self):
-        s = new_state()
-        schedule.record_poll(s, NOW, SCFG, "base")           # the 15:00Z anchor has been served
-        soon = NOW + timedelta(hours=4)                       # special flight departs 19:00Z
-        s["flights"]["SWA283|2026-09-21|D"] = {"reg": "N8977G", "livery": "Louisiana One",
-                                                "sched_utc": soon.isoformat(), "alerted_reg": "N8977G"}
-        later = NOW + timedelta(minutes=100)                  # 16:40Z: inside the 3 h watch horizon
-        self.assertEqual(schedule.due(s, later, SCFG), "watch")
+    def test_swap_watch_poll_when_a_known_special_flight_is_near_but_capped(self):
+        s = self.served()
+        now = self.DAY + timedelta(hours=2)
+        s["flights"]["SWA283|d|D"] = {"reg": "N8977G", "livery": "Louisiana One",
+                                      "sched_utc": (now + timedelta(hours=1)).isoformat()}
+        self.assertEqual(schedule.due(s, now, SCFG), "watch")
         for _ in range(SCFG["max_extra_calls_per_day"]):
-            schedule.record_poll(s, later, SCFG, "watch")
-        self.assertNotEqual(schedule.due(s, later + timedelta(minutes=100), SCFG), "watch")  # daily cap reached
+            schedule.record_poll(s, now, SCFG, "watch")
+        self.assertNotEqual(schedule.due(s, now + timedelta(minutes=100), SCFG), "watch")
 
-    def test_far_off_special_flight_does_not_trigger_extra_poll(self):
-        s = new_state()
-        schedule.record_poll(s, NOW, SCFG, "base")
-        s["flights"]["SWA283|2026-09-21|D"] = {"reg": "N8977G", "livery": "Louisiana One",
-                                                "sched_utc": (NOW + timedelta(hours=9)).isoformat()}
-        self.assertIsNone(schedule.due(s, NOW + timedelta(minutes=100), SCFG))
+    def test_far_off_special_flight_does_not_trigger_a_watch_poll(self):
+        s = self.served()
+        now = self.DAY + timedelta(hours=2)
+        s["flights"]["SWA283|d|D"] = {"reg": "N8977G", "livery": "Louisiana One",
+                                      "sched_utc": (now + timedelta(hours=9)).isoformat()}
+        self.assertIsNone(schedule.due(s, now, SCFG))
 
-    def test_no_extra_poll_without_special_flight(self):
+    def test_daily_poll_count_follows_remaining_budget(self):
         s = new_state()
-        schedule.record_poll(s, NOW, SCFG, "base")
-        self.assertIsNone(schedule.due(s, NOW + timedelta(minutes=100), SCFG))
+        n, calls_left, days_left = schedule.plan(s, datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc), SCFG)
+        self.assertEqual((n, calls_left, days_left), (6, 190, 31))
+        low = new_state()
+        schedule.budget(low, self.DAY, SCFG)
+        low["adb"]["units"] = 370          # only 5 calls left with 9 days to go: under one a day
+        self.assertEqual(schedule.plan(low, self.DAY, SCFG)[0], 0)
+        low["adb"]["last_poll"] = self.DAY.isoformat()
+        pend(low, self.DAY + timedelta(hours=8), 9)
+        self.assertIsNone(schedule.due(low, self.DAY + timedelta(hours=8), SCFG))
+
+    def test_a_whole_month_never_exceeds_the_budget_even_if_flights_are_always_waiting(self):
+        s = new_state()
+        cap = SCFG["monthly_budget_units"] - SCFG["budget_reserve_units"]
+        peak = 0
+        for day in range(1, 31):
+            t = datetime(2026, 9, day, 11, 0, tzinfo=timezone.utc)
+            for _ in range(15 * 6):                         # every 10 minutes, staying inside the calendar day
+                pend(s, t, 9)
+                if schedule.due(s, t, SCFG):
+                    schedule.record_poll(s, t, SCFG, "catch")
+                    peak = max(peak, s["adb"]["units"])
+                t += timedelta(minutes=10)
+        self.assertLessEqual(peak, cap)
+        self.assertGreaterEqual(peak, cap - 30)            # and almost all of it gets used
 
     def test_ledger_syncs_to_the_apis_own_unit_count(self):
         s = new_state()
@@ -261,33 +362,6 @@ class Polling(unittest.TestCase):
         schedule.budget(s, NOW + timedelta(days=30), SCFG)
         self.assertEqual(s["adb"]["units"], 0)
 
-    def test_daily_poll_count_follows_remaining_budget(self):
-        s = new_state()
-        n, anchors, calls_left, days_left = schedule.plan(s, datetime(2026, 10, 1, 0, 5, tzinfo=timezone.utc), SCFG)
-        self.assertEqual((n, calls_left, days_left), (6, 190, 31))
-        self.assertEqual(len(anchors), 6)
-        low = new_state()
-        schedule.budget(low, NOW, SCFG)
-        low["adb"]["units"] = 370          # only 5 calls left with 10 days to go -> under one a day
-        self.assertEqual(schedule.plan(low, NOW, SCFG)[0], 0)
-        self.assertIsNone(schedule.due({**low, "adb": {**low["adb"], "last_poll": NOW.isoformat()}}, NOW + timedelta(hours=8), SCFG))
-
-    def test_a_whole_month_of_scheduled_polls_never_exceeds_the_budget(self):
-        s = new_state()
-        total = 0
-        for day in range(1, 31):
-            now = datetime(2026, 9, day, 0, 5, tzinfo=timezone.utc)
-            n = schedule.plan(s, now, SCFG)[0]
-            for _ in range(n):
-                schedule.record_poll(s, now, SCFG, "base")
-            total += n
-        self.assertLessEqual(s["adb"]["units"], SCFG["monthly_budget_units"] - SCFG["budget_reserve_units"])
-        self.assertGreaterEqual(total, 170)   # and it actually uses (almost) all of it
-
-    def test_schedule_table_is_sane(self):
-        for k, hours in SCFG["poll_schedule_utc"].items():
-            self.assertEqual(len(hours), int(k))
-            self.assertEqual(len(set(hours)), len(hours))
 
 class Parsing(unittest.TestCase):
     def test_flight_keys_agree_across_passes(self):

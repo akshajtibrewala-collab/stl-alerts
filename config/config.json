@@ -68,50 +68,16 @@
     "watch_horizon_hours": 3,
     "max_extra_calls_per_day": 2,
     "flight_retention_hours": 6,
-    "_poll_schedule_note": "Base polls per day are computed from the remaining monthly budget (1..7) and placed at these UTC hours (CDT = UTC-5: 11=6a, 14=9a, 17=12p, 20=3p, 23=6p, 02=9p). A poll costs 2 units whatever its time window, so every poll asks for 12 h.",
-    "poll_schedule_utc": {
-      "1": [
-        17
-      ],
-      "2": [
-        14,
-        22
-      ],
-      "3": [
-        12,
-        17,
-        22
-      ],
-      "4": [
-        11,
-        15,
-        19,
-        23
-      ],
-      "5": [
-        11,
-        14,
-        17,
-        20,
-        23
-      ],
-      "6": [
-        11,
-        14,
-        17,
-        20,
-        23,
-        2
-      ],
-      "7": [
-        10,
-        12,
-        14,
-        17,
-        20,
-        23,
-        2
-      ]
+    "pacing": {
+      "_note": "Daily polls n = floor(calls left / days left), released steadily across the operating window (UTC hours; 11-03 = 6a-10p CDT). A released poll is spent only when >= min_pending flights due within pending_horizon_hours still have no tail, or after max_gap_minutes of quiet.",
+      "ops_start_utc": 11,
+      "ops_end_utc": 3,
+      "max_per_day": 10,
+      "pending_horizon_hours": 3,
+      "min_pending": 4,
+      "min_gap_minutes": 45,
+      "max_gap_minutes": 240,
+      "last_poll_before_end_minutes": 60
     }
   },
   "watch_airline_codes": [

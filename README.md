@@ -50,25 +50,24 @@ Measured on the RapidAPI **Basic** plan: **400 API units/month** (and 1,600 requ
 regardless of its time window** (a 3 h window and a 12 h window both cost 2), so every poll asks for the full 12 h
 and the only levers are how many polls to make and when.
 
-The pass spends the whole month's budget evenly. Each day it works out
-`floor(calls left / days left)` polls (at most 7, leaving a 20-unit reserve), and places them across the STL
-operating day at the UTC hours in `schedule.poll_schedule_utc`, just ahead of the departure banks:
+The pass spends the whole month's budget, paced by **demand** rather than a fixed clock:
 
-| Polls/day | Times (CDT) |
-|---|---|
-| 6 (a normal month) | 6a, 9a, 12p, 3p, 6p, 9p |
-| 4 | 6a, 10a, 2p, 6p |
-| 1 | 12p |
+* **Daily allowance:** `floor(units left / 2 / days left)`, about 6 polls a day in a normal month (up to 10).
+* **Released steadily** across the operating window (6 AM-10 PM CDT, `pacing.ops_start_utc/ops_end_utc`) like a
+  token bucket, so the month is never overspent and the last poll of the day is at most an hour before close.
+* **Spent where it matters:** a released poll is only used when at least `min_pending` (4) flights due in the next
+  3 hours still have **no tail assigned**, because those are exactly the flights a fresh look can resolve. Unused
+  tokens wait through a lull and are spent when the next departure bank builds up. After 4 quiet hours a safety poll
+  runs anyway, and polls are at least 45 minutes apart.
+* **Swap watch:** up to 2 extra polls a day while a flight already known to be special is within 3 hours, paid only
+  from budget left over after every daily poll is covered.
+* The ledger reads the API's own remaining-units header after every call. An API error or rate limit backs the pass
+  off for 2-3 hours; the ADS-B pass is unaffected.
 
-Frequency is deliberately higher in the daytime, because at STL tails show up mostly 0-3 hours before a flight,
-so a flight's tail is most likely to appear between polls that are only a few hours apart. Flights days out
-are not polled separately at all: they are simply not in the 12 h window.
-
-**Extra polls** (up to 2/day, at most every 90 min) happen only while a flight already known to be special is
-within 3 h of its time, to catch a late tail swap, and only out of budget left over after every remaining daily
-poll is paid for. The ledger reads the API's own remaining-units header after every call, so anything spent
-elsewhere (like a probe) is counted. If the API errors or rate-limits, the pass backs off for 2-3 hours and the
-ADS-B pass is unaffected.
+**What this can and can't do (simulated, see `scripts` history):** with the same number of polls, demand-driven timing
+performs about the same as evenly spaced polling, because STL's departures are spread fairly evenly through the day.
+What moves the odds of catching a late tail before departure is the *number* of polls, and that is capped by the
+400-unit quota.
 
 `state/lead_times.csv` records when each flight's tail first appeared; run `python scripts/lead_time_report.py`
 after a few days to see how far ahead tails really get assigned at STL.
